@@ -10,7 +10,8 @@ dotenv.config();
 const app = express();
 const port = Number(process.env.PORT || 4242);
 const publicUrl = process.env.PUBLIC_URL || `http://localhost:${port}`;
-const adminPassword = process.env.ADMIN_PASSWORD || 'chiino-admin';
+const adminPassword = process.env.ADMIN_PASSWORD || '';
+if (!adminPassword) console.warn('[admin] ADMIN_PASSWORD non défini — accès back-office désactivé.');
 
 const secretKey = process.env.STRIPE_SECRET_KEY || '';
 const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY || '';
@@ -31,70 +32,101 @@ let twilioClient = null;
 let twilioClientDisabled = false;
 
 const dataDir = path.join(__dirname, 'data');
-const adminDataFile = path.join(dataDir, 'admin-content.json');
-
-const emptyAdminContent = {
-  customProducts: [],
-  customRealisations: [],
-  hiddenDefaultProducts: [],
-  hiddenDefaultRealisations: [],
-  defaultProductOverrides: {},
-  defaultRealisationOverrides: {},
-  featuredProducts: [],
-  featuredRealisations: [],
-  scheduleEntries: []
-};
-
-function ensureAdminDataFile() {
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-
-  if (!fs.existsSync(adminDataFile)) {
-    fs.writeFileSync(adminDataFile, JSON.stringify(emptyAdminContent, null, 2), 'utf8');
-  }
-}
+const productsFile = path.join(dataDir, 'products.json');
+const realisationsFile = path.join(dataDir, 'realisations.json');
+const scheduleFile = path.join(dataDir, 'schedule.json');
+const legacyAdminDataFile = path.join(dataDir, 'admin-content.json');
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function readAdminContent() {
-  ensureAdminDataFile();
+function ensureDataDir() {
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+}
+
+function readJsonFileSafe(filePath, defaults) {
   try {
-    const raw = fs.readFileSync(adminDataFile, 'utf8');
-    const parsed = JSON.parse(raw);
-    return {
-      customProducts: asArray(parsed.customProducts),
-      customRealisations: asArray(parsed.customRealisations),
-      hiddenDefaultProducts: asArray(parsed.hiddenDefaultProducts),
-      hiddenDefaultRealisations: asArray(parsed.hiddenDefaultRealisations),
-      defaultProductOverrides: parsed.defaultProductOverrides && typeof parsed.defaultProductOverrides === 'object' ? parsed.defaultProductOverrides : {},
-      defaultRealisationOverrides: parsed.defaultRealisationOverrides && typeof parsed.defaultRealisationOverrides === 'object' ? parsed.defaultRealisationOverrides : {},
-      featuredProducts: asArray(parsed.featuredProducts),
-      featuredRealisations: asArray(parsed.featuredRealisations),
-      scheduleEntries: asArray(parsed.scheduleEntries)
-    };
+    if (!fs.existsSync(filePath)) return { ...defaults };
+    return { ...defaults, ...JSON.parse(fs.readFileSync(filePath, 'utf8')) };
   } catch (error) {
-    return { ...emptyAdminContent };
+    return { ...defaults };
   }
 }
 
+function migrateFromLegacyIfNeeded() {
+  if (!fs.existsSync(legacyAdminDataFile)) return;
+  if (fs.existsSync(productsFile) || fs.existsSync(realisationsFile) || fs.existsSync(scheduleFile)) return;
+  try {
+    const old = JSON.parse(fs.readFileSync(legacyAdminDataFile, 'utf8'));
+    fs.writeFileSync(productsFile, JSON.stringify({
+      customProducts: asArray(old.customProducts),
+      hiddenDefaultProducts: asArray(old.hiddenDefaultProducts),
+      defaultProductOverrides: (old.defaultProductOverrides && typeof old.defaultProductOverrides === 'object') ? old.defaultProductOverrides : {},
+      featuredProducts: asArray(old.featuredProducts)
+    }, null, 2), 'utf8');
+    fs.writeFileSync(realisationsFile, JSON.stringify({
+      customRealisations: asArray(old.customRealisations),
+      hiddenDefaultRealisations: asArray(old.hiddenDefaultRealisations),
+      defaultRealisationOverrides: (old.defaultRealisationOverrides && typeof old.defaultRealisationOverrides === 'object') ? old.defaultRealisationOverrides : {},
+      featuredRealisations: asArray(old.featuredRealisations)
+    }, null, 2), 'utf8');
+    fs.writeFileSync(scheduleFile, JSON.stringify({
+      scheduleEntries: asArray(old.scheduleEntries)
+    }, null, 2), 'utf8');
+    console.log('[data] Migration admin-content.json → 3 fichiers effectuée.');
+  } catch (error) {
+    console.error('[data] Échec migration:', error.message);
+  }
+}
+
+function readAdminContent() {
+  ensureDataDir();
+  migrateFromLegacyIfNeeded();
+  const products = readJsonFileSafe(productsFile, { customProducts: [], hiddenDefaultProducts: [], defaultProductOverrides: {}, featuredProducts: [] });
+  const reals = readJsonFileSafe(realisationsFile, { customRealisations: [], hiddenDefaultRealisations: [], defaultRealisationOverrides: {}, featuredRealisations: [] });
+  const schedule = readJsonFileSafe(scheduleFile, { scheduleEntries: [] });
+  return {
+    customProducts: asArray(products.customProducts),
+    customRealisations: asArray(reals.customRealisations),
+    hiddenDefaultProducts: asArray(products.hiddenDefaultProducts),
+    hiddenDefaultRealisations: asArray(reals.hiddenDefaultRealisations),
+    defaultProductOverrides: (products.defaultProductOverrides && typeof products.defaultProductOverrides === 'object') ? products.defaultProductOverrides : {},
+    defaultRealisationOverrides: (reals.defaultRealisationOverrides && typeof reals.defaultRealisationOverrides === 'object') ? reals.defaultRealisationOverrides : {},
+    featuredProducts: asArray(products.featuredProducts),
+    featuredRealisations: asArray(reals.featuredRealisations),
+    scheduleEntries: asArray(schedule.scheduleEntries)
+  };
+}
+
 function writeAdminContent(content) {
-  ensureAdminDataFile();
-  const safeContent = {
+  ensureDataDir();
+  fs.writeFileSync(productsFile, JSON.stringify({
+    customProducts: asArray(content.customProducts),
+    hiddenDefaultProducts: asArray(content.hiddenDefaultProducts),
+    defaultProductOverrides: (content.defaultProductOverrides && typeof content.defaultProductOverrides === 'object') ? content.defaultProductOverrides : {},
+    featuredProducts: asArray(content.featuredProducts)
+  }, null, 2), 'utf8');
+  fs.writeFileSync(realisationsFile, JSON.stringify({
+    customRealisations: asArray(content.customRealisations),
+    hiddenDefaultRealisations: asArray(content.hiddenDefaultRealisations),
+    defaultRealisationOverrides: (content.defaultRealisationOverrides && typeof content.defaultRealisationOverrides === 'object') ? content.defaultRealisationOverrides : {},
+    featuredRealisations: asArray(content.featuredRealisations)
+  }, null, 2), 'utf8');
+  fs.writeFileSync(scheduleFile, JSON.stringify({
+    scheduleEntries: asArray(content.scheduleEntries)
+  }, null, 2), 'utf8');
+  return {
     customProducts: asArray(content.customProducts),
     customRealisations: asArray(content.customRealisations),
     hiddenDefaultProducts: asArray(content.hiddenDefaultProducts),
     hiddenDefaultRealisations: asArray(content.hiddenDefaultRealisations),
-    defaultProductOverrides: content.defaultProductOverrides && typeof content.defaultProductOverrides === 'object' ? content.defaultProductOverrides : {},
-    defaultRealisationOverrides: content.defaultRealisationOverrides && typeof content.defaultRealisationOverrides === 'object' ? content.defaultRealisationOverrides : {},
+    defaultProductOverrides: (content.defaultProductOverrides && typeof content.defaultProductOverrides === 'object') ? content.defaultProductOverrides : {},
+    defaultRealisationOverrides: (content.defaultRealisationOverrides && typeof content.defaultRealisationOverrides === 'object') ? content.defaultRealisationOverrides : {},
     featuredProducts: asArray(content.featuredProducts),
     featuredRealisations: asArray(content.featuredRealisations),
     scheduleEntries: asArray(content.scheduleEntries)
   };
-  fs.writeFileSync(adminDataFile, JSON.stringify(safeContent, null, 2), 'utf8');
-  return safeContent;
 }
 
 function requireAdmin(req, res, next) {
@@ -495,7 +527,7 @@ app.post('/api/admin/login', (req, res) => {
   return res.json({ ok: true });
 });
 
-app.get('/api/admin/content', (req, res) => {
+app.get('/api/admin/content', requireAdmin, (_req, res) => {
   return res.json(readAdminContent());
 });
 

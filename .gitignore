@@ -4,3 +4,6 @@ node_modules/
 .DS_Store
 *.zip
 data/admin-content.json
+data/products.json
+data/realisations.json
+data/schedule.json

@@ -76,7 +76,6 @@ const FEATURED_REALS_KEY = 'chiino_featured_realisations_v1';
 const SCHEDULE_ENTRIES_KEY = 'chiino_schedule_entries_v1';
 const ADMIN_SESSION_KEY = 'chiino_admin_session_v1';
 const ADMIN_PASSWORD_SESSION_KEY = 'chiino_admin_password_v1';
-const ADMIN_PASSWORD = 'chiino-admin';
 
 let serverAdminAvailable = false;
 let customProductsState = [];
@@ -1280,8 +1279,8 @@ function initAdminBackoffice() {
         setLoginFeedback('Mot de passe incorrect.', 'err');
         return;
       }
-    } else if (password !== ADMIN_PASSWORD) {
-      setLoginFeedback('Mot de passe incorrect.', 'err');
+    } else {
+      setLoginFeedback('Serveur inaccessible. Réessayez plus tard.', 'err');
       return;
     }
 

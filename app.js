@@ -1,0 +1,2931 @@
+function showPage(id, btn) {
+  const pageMap = {
+    accueil: 'index.html',
+    realisations: 'realisations.html',
+    boutique: 'boutique.html',
+    contact: 'contact.html',
+    reservation: 'reservation.html'
+  };
+
+  const pageEls = document.querySelectorAll('.page');
+  const target = document.getElementById('page-' + id);
+
+  // Multi-page mode: redirection vers le fichier HTML cible.
+  if (!pageEls.length || !target) {
+    if (pageMap[id]) window.location.href = pageMap[id];
+    return;
+  }
+
+  pageEls.forEach((p) => p.classList.remove('active'));
+  target.classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach((b) => b.classList.remove('active'));
+  if (btn && btn.classList) btn.classList.add('active');
+  document.body.classList.toggle('is-boutique', id === 'boutique');
+  if (id !== 'boutique') closeCart();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function setFilt(el) {
+  const container = el.closest('.filters, .shop-filters');
+  if (!container) return;
+
+  const norm = (value) => (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  const selected = norm(el.textContent);
+
+  container.querySelectorAll('.filt').forEach(f => f.classList.remove('on'));
+  el.classList.add('on');
+
+  if (container.classList.contains('filters')) {
+    document.querySelectorAll('.real-cell').forEach((card) => {
+      const cardStyle = norm(card.querySelector('.cell-style')?.textContent);
+      card.style.display = (selected === 'tous' || cardStyle === selected) ? '' : 'none';
+    });
+  }
+
+  if (container.classList.contains('shop-filters')) {
+    document.querySelectorAll('.product').forEach((card) => {
+      const cardCategory = norm(card.dataset.category);
+      card.style.display = (selected === 'tous' || cardCategory === selected) ? '' : 'none';
+    });
+  }
+}
+
+const initialActivePage = document.querySelector('.page.active');
+if (initialActivePage && initialActivePage.id === 'page-boutique') {
+  document.body.classList.add('is-boutique');
+}
+
+const lightbox = document.getElementById('lightbox');
+const lightboxImage = document.getElementById('lightbox-image');
+const lightboxClose = document.getElementById('lightbox-close');
+let lastFocusedElement = null;
+
+const CUSTOM_PRODUCTS_KEY = 'chiino_custom_products_v1';
+const CUSTOM_REALS_KEY = 'chiino_custom_realisations_v1';
+const HIDDEN_DEFAULT_PRODUCTS_KEY = 'chiino_hidden_default_products_v1';
+const HIDDEN_DEFAULT_REALS_KEY = 'chiino_hidden_default_realisations_v1';
+const DEFAULT_PRODUCT_OVERRIDES_KEY = 'chiino_default_product_overrides_v1';
+const DEFAULT_REAL_OVERRIDES_KEY = 'chiino_default_real_overrides_v1';
+const FEATURED_PRODUCTS_KEY = 'chiino_featured_products_v1';
+const FEATURED_REALS_KEY = 'chiino_featured_realisations_v1';
+const SCHEDULE_ENTRIES_KEY = 'chiino_schedule_entries_v1';
+const ADMIN_SESSION_KEY = 'chiino_admin_session_v1';
+const ADMIN_PASSWORD_SESSION_KEY = 'chiino_admin_password_v1';
+const ADMIN_PASSWORD = 'chiino-admin';
+
+let serverAdminAvailable = false;
+let customProductsState = [];
+let customRealisationsState = [];
+let hiddenDefaultProductsState = [];
+let hiddenDefaultRealisationsState = [];
+let defaultProductOverridesState = {};
+let defaultRealisationOverridesState = {};
+let featuredProductsState = [];
+let featuredRealisationsState = [];
+let scheduleEntriesState = [];
+let adminPlannerWeekStartState = null;
+let editingProductId = null;
+let editingRealId = null;
+let editingProductMode = null;
+let editingRealMode = null;
+
+const DEFAULT_PRODUCT_ITEMS = [
+  {
+    id: 'FLASH-GEO-V3',
+    name: 'Crème réparatrice',
+    shortDesc: 'Hydratation de votre peau.',
+    details: 'Crème réparatrice enrichie en agents apaisants pour nourrir la peau tatouée et aider à maintenir son confort au quotidien.',
+    price: 28,
+    oldPrice: null,
+    category: 'modeles',
+    badge: 'Nouveau',
+    optionLabel: 'Format',
+    options: '250ml,500ml',
+    imageSrc: 'Assets/pot.png'
+  },
+  {
+    id: 'SOIN-GEL-50',
+    name: 'Gel cicatrisant',
+    shortDesc: 'Cicatrisation de votre tatouage',
+    details: 'Gel cicatrisant à absorption rapide, conçu pour accompagner la phase de cicatrisation et protéger l\'éclat du tatouage.',
+    price: 22,
+    oldPrice: null,
+    category: 'soins',
+    badge: 'Déstockage',
+    optionLabel: 'Format',
+    options: '100ml,250ml',
+    imageSrc: 'Assets/gel.png'
+  },
+  {
+    id: 'FLASH-SERPENTS',
+    name: 'Flash Tattoo',
+    shortDesc: 'A5 couverture rigide, + 100 motifs',
+    details: 'Flash Tattoo regroupant une sélection de motifs prêts à tatouer, avec un style marqué pour inspirer ton prochain projet.',
+    price: 15,
+    oldPrice: null,
+    category: 'modeles',
+    badge: '',
+    optionLabel: '',
+    options: '',
+    imageSrc: 'Assets/flash.png'
+  },
+  {
+    id: 'NOTEBOOK-CHIINO',
+    name: 'Carnet de croquis - Chiino',
+    shortDesc: 'A5 couverture rigide, 40 pages',
+    details: 'Carnet de croquis - Chiino idéal pour préparer des idées, esquisser des compositions et conserver ses références visuelles.',
+    price: 12,
+    oldPrice: null,
+    category: 'modeles',
+    badge: 'Nouveau',
+    optionLabel: '',
+    options: '',
+    imageSrc: 'Assets/croquis.png'
+  },
+  {
+    id: 'TSHIRT-CHIINO',
+    name: 'T-shirt - Logo Chiino',
+    shortDesc: 'Coton bio, noir, tailles S-XL',
+    details: 'T-shirt - Logo Chiino en coton bio, coupe unisexe confortable, avec impression signature pour un look studio affirmé.',
+    price: 36,
+    oldPrice: 45,
+    category: 'vetements',
+    badge: '- 20 %',
+    optionLabel: 'Taille',
+    options: 'S,M,L,XL',
+    imageSrc: 'Assets/t-shirt.png'
+  }
+];
+
+const DEFAULT_REALISATION_ITEMS = [
+  { id: 'play-to-good', title: 'Play to Good', style: 'Lettering', imageSrc: 'Assets/bras-lettres2.png' },
+  { id: 'harmonie', title: 'Harmonie', style: 'Japonais', imageSrc: 'Assets/cou-japon.png' },
+  { id: 'course-du-temps', title: 'Course du temps', style: 'Flash custom', imageSrc: 'Assets/bras-temps.png' },
+  { id: 'espoir', title: 'Espoir', style: 'Flash custom', imageSrc: 'Assets/bras-ciel.png' },
+  { id: 'date-ancree', title: 'Date ancrée', style: 'Old School', imageSrc: 'Assets/main-date.png' },
+  { id: 'fleuraison', title: 'Fleuraison', style: 'Florale', imageSrc: 'Assets/dos-fleur.png' }
+];
+
+function getAdminPasswordFromSession() {
+  return sessionStorage.getItem(ADMIN_PASSWORD_SESSION_KEY) || '';
+}
+
+async function fetchJson(url, options) {
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data && data.error ? data.error : 'request-failed';
+    throw new Error(message);
+  }
+  return data;
+}
+
+function applyContentState(content) {
+  customProductsState = asArray(content.customProducts);
+  customRealisationsState = asArray(content.customRealisations);
+  hiddenDefaultProductsState = asArray(content.hiddenDefaultProducts);
+  hiddenDefaultRealisationsState = asArray(content.hiddenDefaultRealisations);
+  defaultProductOverridesState = content.defaultProductOverrides && typeof content.defaultProductOverrides === 'object'
+    ? content.defaultProductOverrides
+    : {};
+  defaultRealisationOverridesState = content.defaultRealisationOverrides && typeof content.defaultRealisationOverrides === 'object'
+    ? content.defaultRealisationOverrides
+    : {};
+  featuredProductsState = asArray(content.featuredProducts);
+  featuredRealisationsState = asArray(content.featuredRealisations);
+  scheduleEntriesState = asArray(content.scheduleEntries);
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function loadStateFromLocalStorage() {
+  applyContentState({
+    customProducts: readJsonStorage(CUSTOM_PRODUCTS_KEY, []),
+    customRealisations: readJsonStorage(CUSTOM_REALS_KEY, []),
+    hiddenDefaultProducts: readJsonStorage(HIDDEN_DEFAULT_PRODUCTS_KEY, []),
+    hiddenDefaultRealisations: readJsonStorage(HIDDEN_DEFAULT_REALS_KEY, []),
+    defaultProductOverrides: readJsonStorage(DEFAULT_PRODUCT_OVERRIDES_KEY, {}),
+    defaultRealisationOverrides: readJsonStorage(DEFAULT_REAL_OVERRIDES_KEY, {}),
+    featuredProducts: readJsonStorage(FEATURED_PRODUCTS_KEY, []),
+    featuredRealisations: readJsonStorage(FEATURED_REALS_KEY, []),
+    scheduleEntries: readJsonStorage(SCHEDULE_ENTRIES_KEY, [])
+  });
+}
+
+function persistStateToLocalStorage() {
+  writeJsonStorage(CUSTOM_PRODUCTS_KEY, customProductsState);
+  writeJsonStorage(CUSTOM_REALS_KEY, customRealisationsState);
+  writeJsonStorage(HIDDEN_DEFAULT_PRODUCTS_KEY, hiddenDefaultProductsState);
+  writeJsonStorage(HIDDEN_DEFAULT_REALS_KEY, hiddenDefaultRealisationsState);
+  writeJsonStorage(DEFAULT_PRODUCT_OVERRIDES_KEY, defaultProductOverridesState);
+  writeJsonStorage(DEFAULT_REAL_OVERRIDES_KEY, defaultRealisationOverridesState);
+  writeJsonStorage(FEATURED_PRODUCTS_KEY, featuredProductsState);
+  writeJsonStorage(FEATURED_REALS_KEY, featuredRealisationsState);
+  writeJsonStorage(SCHEDULE_ENTRIES_KEY, scheduleEntriesState);
+}
+
+async function tryLoadStateFromServer() {
+  try {
+    const data = await fetchJson('/api/admin/content');
+    serverAdminAvailable = true;
+    applyContentState(data);
+    return true;
+  } catch (error) {
+    serverAdminAvailable = false;
+    return false;
+  }
+}
+
+async function refreshContentState() {
+  const fromServer = await tryLoadStateFromServer();
+  if (!fromServer) {
+    loadStateFromLocalStorage();
+  }
+}
+
+async function adminApi(path, method, body) {
+  if (!serverAdminAvailable) {
+    throw new Error('server-unavailable');
+  }
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-admin-password': getAdminPasswordFromSession()
+  };
+
+  return fetchJson(path, {
+    method: method || 'GET',
+    headers,
+    body: body ? JSON.stringify(body) : undefined
+  });
+}
+
+function readJsonStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(fallback) ? (Array.isArray(parsed) ? parsed : fallback) : (parsed || fallback);
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function writeJsonStorage(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function slugify(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function normalizeProductCategory(value) {
+  const normalized = (value || '').toLowerCase().trim();
+  if (normalized.includes('soin')) return 'soins';
+  if (normalized.includes('vetement') || normalized.includes('vêtement')) return 'vetements';
+  return 'modeles';
+}
+
+function getMergedDefaultProduct(id) {
+  const base = DEFAULT_PRODUCT_ITEMS.find((item) => item.id === id);
+  if (!base) return null;
+  const override = defaultProductOverridesState[id] || {};
+  return { ...base, ...override };
+}
+
+function getMergedDefaultRealisation(id) {
+  const base = DEFAULT_REALISATION_ITEMS.find((item) => item.id === id);
+  if (!base) return null;
+  const override = defaultRealisationOverridesState[id] || {};
+  return { ...base, ...override };
+}
+
+function applyProductDataToCard(card, product) {
+  if (!card || !product) return;
+
+  card.dataset.category = normalizeProductCategory(product.category);
+  card.dataset.details = product.details || product.name;
+  card.dataset.price = String(product.price || 0);
+  card.dataset.optionLabel = product.optionLabel || '';
+  card.dataset.options = product.options || '';
+
+  const titleEl = card.querySelector('.product-info h3');
+  const shortEl = card.querySelector('.product-info p');
+  if (titleEl) titleEl.textContent = product.name || 'Produit';
+  if (shortEl) shortEl.textContent = product.shortDesc || '';
+
+  const image = card.querySelector('.product-img img');
+  if (image && product.imageSrc) {
+    image.src = product.imageSrc;
+    image.alt = product.name || image.alt;
+  }
+
+  const imageWrap = card.querySelector('.product-img');
+  if (imageWrap) {
+    const existingBadge = imageWrap.querySelector('.product-badge');
+    if (product.badge) {
+      if (existingBadge) {
+        existingBadge.textContent = product.badge;
+      } else {
+        const badge = document.createElement('div');
+        badge.className = 'product-badge';
+        badge.textContent = product.badge;
+        imageWrap.insertBefore(badge, imageWrap.firstChild);
+      }
+    } else if (existingBadge) {
+      existingBadge.remove();
+    }
+  }
+
+  const footer = card.querySelector('.product-footer');
+  if (!footer) return;
+
+  const addButton = footer.querySelector('.add-cart');
+  footer.innerHTML = '';
+
+  if (Number(product.oldPrice) > Number(product.price) && Number(product.price) > 0) {
+    const wrap = document.createElement('span');
+    wrap.className = 'price-wrap';
+
+    const oldPrice = document.createElement('span');
+    oldPrice.className = 'price-old';
+    oldPrice.textContent = Number(product.oldPrice).toFixed(2).replace('.', ',') + '€';
+
+    const price = document.createElement('span');
+    price.className = 'price';
+    price.textContent = Number(product.price).toFixed(2).replace('.', ',') + '€';
+
+    wrap.appendChild(oldPrice);
+    wrap.appendChild(price);
+    footer.appendChild(wrap);
+  } else {
+    const price = document.createElement('span');
+    price.className = 'price';
+    price.textContent = Number(product.price || 0).toFixed(2).replace('.', ',') + '€';
+    footer.appendChild(price);
+  }
+
+  if (addButton) {
+    footer.appendChild(addButton);
+  }
+}
+
+function applyDefaultOverridesOnPublicPages() {
+  const productCards = document.querySelectorAll('#page-boutique .shop-grid .product:not([data-custom-item="1"])');
+  productCards.forEach((card) => {
+    const id = card.dataset.sku;
+    const merged = getMergedDefaultProduct(id);
+    if (merged) applyProductDataToCard(card, merged);
+  });
+
+  const realCards = document.querySelectorAll('#page-realisations .real-grid .real-cell:not([data-custom-item="1"])');
+  realCards.forEach((card) => {
+    const titleEl = card.querySelector('.cell-title');
+    if (!titleEl) return;
+
+    if (!card.dataset.defaultRealId) {
+      card.dataset.defaultRealId = slugify(titleEl.textContent || '');
+    }
+
+    const merged = getMergedDefaultRealisation(card.dataset.defaultRealId);
+    if (!merged) return;
+
+    const styleEl = card.querySelector('.cell-style');
+    const img = card.querySelector('img');
+
+    titleEl.textContent = merged.title || titleEl.textContent;
+    if (styleEl) styleEl.textContent = merged.style || styleEl.textContent;
+    if (img && merged.imageSrc) {
+      img.src = merged.imageSrc;
+      img.alt = merged.title || img.alt;
+    }
+  });
+}
+
+function getMergedDefaultRealisationsCatalog() {
+  return DEFAULT_REALISATION_ITEMS.map((item) => ({
+    id: item.id,
+    ...(getMergedDefaultRealisation(item.id) || item)
+  }));
+}
+
+function getMergedDefaultProductsCatalog() {
+  return DEFAULT_PRODUCT_ITEMS.map((item) => ({
+    id: item.id,
+    ...(getMergedDefaultProduct(item.id) || item)
+  }));
+}
+
+function getEffectiveFeaturedRealisationIds() {
+  if (Array.isArray(featuredRealisationsState) && featuredRealisationsState.length) {
+    return featuredRealisationsState.slice(0, 4);
+  }
+
+  return getMergedDefaultRealisationsCatalog()
+    .map((item) => item.id)
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
+function getEffectiveFeaturedProductIds() {
+  if (Array.isArray(featuredProductsState) && featuredProductsState.length) {
+    return featuredProductsState.slice(0, 3);
+  }
+
+  return getMergedDefaultProductsCatalog()
+    .filter((item) => !hiddenDefaultProductsState.includes(item.id))
+    .map((item) => item.id)
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function applyFeaturedRealisationsOnHome() {
+  const miniGrid = document.querySelector('#page-accueil .mini-grid');
+  if (!miniGrid) return;
+
+  const catalog = getMergedDefaultRealisationsCatalog().concat(
+    customRealisationsState.map((item) => ({
+      id: item.id,
+      title: item.title,
+      style: item.style,
+      imageSrc: item.imageSrc || 'Assets/bras-ciel.png'
+    }))
+  );
+
+  const selected = getEffectiveFeaturedRealisationIds()
+    .map((id) => catalog.find((item) => item.id === id))
+    .filter(Boolean)
+    .slice(0, 4);
+
+  if (!selected.length) return;
+
+  miniGrid.innerHTML = selected.map((item, index) => {
+    const tilt = index % 2 === 0 ? 'tilt-left' : 'tilt-right';
+    return '<div class="mini-cell"><img class="' + tilt + '" src="' + escapeHtml(item.imageSrc || 'Assets/bras-ciel.png') + '" alt="' + escapeHtml(item.title || 'Réalisation') + '" loading="lazy" decoding="async"><div class="cell-overlay"><span class="cell-tag">' + escapeHtml(item.style || 'Flash custom') + '</span></div></div>';
+  }).join('');
+}
+
+function applyFeaturedProductsOnHome() {
+  const bestGrid = document.querySelector('#page-accueil .home-bestsellers .home-best-grid');
+  if (!bestGrid) return;
+
+  const catalog = getMergedDefaultProductsCatalog()
+    .filter((item) => !hiddenDefaultProductsState.includes(item.id))
+    .concat(
+      customProductsState.map((item) => ({
+        id: item.id,
+        name: item.name,
+        shortDesc: item.shortDesc,
+        price: Number(item.price),
+        imageSrc: item.imageSrc || 'Assets/flash.png'
+      }))
+    );
+
+  const selected = getEffectiveFeaturedProductIds()
+    .map((id) => catalog.find((item) => item.id === id))
+    .filter(Boolean)
+    .slice(0, 3);
+
+  if (!selected.length) return;
+
+  bestGrid.innerHTML = selected.map((item) => {
+    const safePrice = Number.isFinite(Number(item.price))
+      ? Number(item.price).toFixed(2).replace('.', ',') + '€'
+      : '0,00€';
+    return '<article class="home-best-card"><div class="home-best-media"><img src="' + escapeHtml(item.imageSrc || 'Assets/flash.png') + '" alt="' + escapeHtml(item.name || 'Produit') + '" loading="lazy" decoding="async"></div><div class="home-best-body"><h3>' + escapeHtml(item.name || 'Produit') + '</h3><p>' + escapeHtml(item.shortDesc || 'Produit recommandé par le studio.') + '</p><div class="home-best-foot"><span>' + safePrice + '</span><button class="add-btn" onclick="window.location.href=\'boutique.html\'">Voir</button></div></div></article>';
+  }).join('');
+}
+
+function buildCustomProductCard(item) {
+  const card = document.createElement('div');
+  card.className = 'product';
+  card.dataset.customItem = '1';
+  card.dataset.sku = item.sku;
+  card.dataset.supplier = item.supplier || 'Back-office';
+  card.dataset.price = String(item.price);
+  card.dataset.category = normalizeProductCategory(item.category);
+  card.dataset.details = item.details || item.shortDesc || item.name;
+  card.dataset.optionLabel = item.optionLabel || '';
+  card.dataset.options = item.options || '';
+
+  const imageWrap = document.createElement('div');
+  imageWrap.className = 'product-img';
+  if (item.badge) {
+    const badge = document.createElement('div');
+    badge.className = 'product-badge';
+    badge.textContent = item.badge;
+    imageWrap.appendChild(badge);
+  }
+
+  const image = document.createElement('img');
+  image.src = item.imageSrc || 'Assets/flash.png';
+  image.alt = item.name;
+  image.loading = 'lazy';
+  image.decoding = 'async';
+  imageWrap.appendChild(image);
+
+  const info = document.createElement('div');
+  info.className = 'product-info';
+
+  const title = document.createElement('h3');
+  title.textContent = item.name;
+
+  const short = document.createElement('p');
+  short.textContent = item.shortDesc || 'Produit personnalisé';
+
+  const footer = document.createElement('div');
+  footer.className = 'product-footer';
+
+  if (item.oldPrice && Number(item.oldPrice) > Number(item.price)) {
+    const wrap = document.createElement('span');
+    wrap.className = 'price-wrap';
+
+    const oldPrice = document.createElement('span');
+    oldPrice.className = 'price-old';
+    oldPrice.textContent = Number(item.oldPrice).toFixed(2).replace('.', ',') + '€';
+
+    const price = document.createElement('span');
+    price.className = 'price';
+    price.textContent = Number(item.price).toFixed(2).replace('.', ',') + '€';
+
+    wrap.appendChild(oldPrice);
+    wrap.appendChild(price);
+    footer.appendChild(wrap);
+  } else {
+    const price = document.createElement('span');
+    price.className = 'price';
+    price.textContent = Number(item.price).toFixed(2).replace('.', ',') + '€';
+    footer.appendChild(price);
+  }
+
+  const button = document.createElement('button');
+  button.className = 'add-btn add-cart';
+  button.textContent = "Voir l'article";
+  footer.appendChild(button);
+
+  info.appendChild(title);
+  info.appendChild(short);
+  info.appendChild(footer);
+
+  card.appendChild(imageWrap);
+  card.appendChild(info);
+  return card;
+}
+
+function buildCustomRealisationCard(item, index) {
+  const card = document.createElement('div');
+  card.className = 'real-cell';
+  card.dataset.customItem = '1';
+
+  const img = document.createElement('img');
+  img.className = index % 2 === 0 ? 'tilt-left' : 'tilt-right';
+  img.src = item.imageSrc || 'Assets/bras-ciel.png';
+  img.alt = item.title || 'Réalisation';
+  img.loading = 'lazy';
+  img.decoding = 'async';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'cell-overlay';
+
+  const title = document.createElement('p');
+  title.className = 'cell-title';
+  title.textContent = item.title || 'Réalisation';
+
+  const style = document.createElement('p');
+  style.className = 'cell-style';
+  style.textContent = item.style || 'Flash custom';
+
+  overlay.appendChild(title);
+  overlay.appendChild(style);
+
+  card.appendChild(img);
+  card.appendChild(overlay);
+  return card;
+}
+
+function renderCustomProducts() {
+  const grid = document.querySelector('#page-boutique .shop-grid');
+  if (!grid) return;
+
+  grid.querySelectorAll('.product[data-custom-item="1"]').forEach((node) => node.remove());
+
+  const hiddenDefaultProducts = hiddenDefaultProductsState;
+  grid.querySelectorAll('.product').forEach((card) => {
+    if (hiddenDefaultProducts.includes(card.dataset.sku)) {
+      card.remove();
+    }
+  });
+
+  const customProducts = customProductsState;
+  customProducts.forEach((item) => {
+    if (!item || !item.name || !Number.isFinite(Number(item.price))) return;
+    grid.appendChild(buildCustomProductCard(item));
+  });
+
+  const countEl = document.querySelector('#page-boutique .shop-meta div');
+  if (countEl) {
+    countEl.textContent = grid.querySelectorAll('.product').length + ' produits';
+  }
+}
+
+function renderCustomRealisations() {
+  const grid = document.querySelector('#page-realisations .real-grid');
+  if (!grid) return;
+
+  grid.querySelectorAll('.real-cell[data-custom-item="1"]').forEach((node) => node.remove());
+
+  const hiddenDefaultReals = hiddenDefaultRealisationsState;
+  grid.querySelectorAll('.real-cell').forEach((card) => {
+    const title = card.querySelector('.cell-title')?.textContent?.trim() || '';
+    const defaultId = card.dataset.defaultRealId || slugify(title);
+    if (hiddenDefaultReals.includes(defaultId)) {
+      card.remove();
+    }
+  });
+
+  const customReals = customRealisationsState;
+  customReals.forEach((item, index) => {
+    if (!item || !item.title) return;
+    grid.appendChild(buildCustomRealisationCard(item, index));
+  });
+}
+
+function bindGalleryCells() {
+  document.querySelectorAll('.mini-cell, .real-cell').forEach((cell) => {
+    if (cell.dataset.lightboxBound === '1') return;
+    cell.dataset.lightboxBound = '1';
+
+    cell.addEventListener('click', () => {
+      const img = cell.querySelector('img');
+      if (!img) return;
+      openLightbox(img.src, img.alt);
+    });
+  });
+}
+
+async function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('read-file-failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function showAdminFeedback(message, type) {
+  const feedback = document.getElementById('admin-feedback');
+  if (!feedback) return;
+  feedback.textContent = message;
+  feedback.classList.add('show');
+  feedback.classList.remove('ok', 'err');
+  feedback.classList.add(type === 'ok' ? 'ok' : 'err');
+}
+
+function getScheduleStatusLabel(status) {
+  const key = String(status || 'en-attente').toLowerCase();
+  if (key === 'confirme') return 'Confirme';
+  if (key === 'refuse') return 'Refuse';
+  if (key === 'termine') return 'Termine';
+  return 'En attente';
+}
+
+function getScheduleStatusClass(status) {
+  const key = String(status || 'en-attente').toLowerCase();
+  if (key === 'confirme') return 'is-confirmed';
+  if (key === 'en-attente' || key === 'en attente') return 'is-pending';
+  return 'is-done';
+}
+
+function getScheduleDurationMin(entry) {
+  const duration = Number(entry?.durationMin || 0);
+  return Number.isFinite(duration) && duration > 0 ? duration : 120;
+}
+
+function formatDurationLabel(durationMin) {
+  const minutes = Math.max(30, Number(durationMin || 120));
+  if (minutes % 60 === 0) return (minutes / 60) + 'h';
+  return minutes + ' min';
+}
+
+function computeScheduleEndTime(startTime, durationMin) {
+  const match = String(startTime || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return '';
+  const startMinutes = Number(match[1]) * 60 + Number(match[2]);
+  if (!Number.isFinite(startMinutes)) return '';
+  const end = startMinutes + Math.max(30, Number(durationMin || 120));
+  const hour = Math.floor((end % (24 * 60)) / 60);
+  const minute = end % 60;
+  return String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+}
+
+function toLocalDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function renderAdminSchedulePlanner() {
+  const planner = document.getElementById('admin-schedule-planner');
+  if (!planner) return;
+
+  const sortedEntries = scheduleEntriesState
+    .slice()
+    .sort((a, b) => String((a.date || '') + (a.time || '')).localeCompare(String((b.date || '') + (b.time || ''))));
+
+  const getWeekStartMonday = (baseDate) => {
+    const date = new Date(baseDate);
+    const day = date.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    date.setDate(date.getDate() + diffToMonday);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
+  const parseEntryDate = (entry) => {
+    const raw = String(entry.date || '').trim();
+    if (!raw) return null;
+    const parsed = new Date(raw + 'T00:00:00');
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const datedEntries = sortedEntries
+    .map((entry) => ({ entry, dateObj: parseEntryDate(entry) }))
+    .filter((item) => item.dateObj);
+
+  const referenceDate = (datedEntries.find((item) => item.dateObj.getTime() >= now.getTime()) || datedEntries[0] || { dateObj: now }).dateObj;
+  const defaultWeekStart = getWeekStartMonday(referenceDate);
+  if (!adminPlannerWeekStartState) {
+    adminPlannerWeekStartState = toLocalDateKey(defaultWeekStart);
+  }
+
+  const weekStart = getWeekStartMonday(new Date(adminPlannerWeekStartState + 'T00:00:00'));
+  if (Number.isNaN(weekStart.getTime())) {
+    adminPlannerWeekStartState = toLocalDateKey(defaultWeekStart);
+    weekStart.setTime(defaultWeekStart.getTime());
+  }
+
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + index);
+    return {
+      key: toLocalDateKey(date),
+      label: date.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })
+    };
+  });
+
+  const startHour = 9;
+  const endHour = 19;
+
+  const outsideGrid = [];
+
+  sortedEntries.forEach((entry) => {
+    const dateObj = parseEntryDate(entry);
+    const timeRaw = String(entry.time || '').trim();
+    const match = timeRaw.match(/^(\d{1,2}):(\d{2})$/);
+
+    if (!dateObj || !match) {
+      outsideGrid.push(entry);
+      return;
+    }
+
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const startMinutes = (hour * 60) + minute;
+    const durationMin = getScheduleDurationMin(entry);
+    const endMinutes = startMinutes + durationMin;
+    const dateKey = toLocalDateKey(dateObj);
+    const inWeek = weekDays.some((d) => d.key === dateKey);
+    const visibleStart = startHour * 60;
+    const visibleEnd = (endHour + 1) * 60;
+    if (!inWeek || endMinutes <= visibleStart || startMinutes >= visibleEnd) {
+      outsideGrid.push(entry);
+      return;
+    }
+
+  });
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  const weekTitle = `Semaine du ${weekStart.toLocaleDateString('fr-FR')} au ${weekEnd.toLocaleDateString('fr-FR')}`;
+
+  const emptyHint = !sortedEntries.length
+    ? '<div class="admin-week-empty">Aucune reservation pour le moment. Le planning est pret a recevoir les futurs rendez-vous.</div>'
+    : '';
+
+  const outsideMarkup = outsideGrid.length
+    ? '<div class="admin-week-outside"><strong>Hors plage visible</strong><span>' + outsideGrid.length + ' rendez-vous (horaire/date en dehors de 09:00-19:00 ou autre semaine).</span></div>'
+    : '';
+
+  const weekDayKeys = new Set(weekDays.map((d) => d.key));
+  const todayKey = toLocalDateKey(new Date());
+  const totalReservations = sortedEntries.filter((entry) => /^\d{4}-\d{2}-\d{2}$/.test(String(entry.date || '').trim())).length;
+  const weekReservations = sortedEntries.filter((entry) => weekDayKeys.has(String(entry.date || '').trim())).length;
+  const todayReservations = sortedEntries.filter((entry) => String(entry.date || '').trim() === todayKey).length;
+
+  const mobileDaysMarkup = weekDays.map((day, index) => {
+    const dayDate = new Date(day.key + 'T00:00:00');
+    const dayLabel = Number.isNaN(dayDate.getTime())
+      ? day.key
+      : dayDate.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit' });
+
+    const dayEntries = sortedEntries
+      .filter((entry) => String(entry.date || '') === day.key)
+      .filter((entry) => /^\d{1,2}:\d{2}$/.test(String(entry.time || '').trim()))
+      .sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
+
+    const rows = dayEntries.length
+      ? dayEntries.map((entry) => {
+        const statusClass = getScheduleStatusClass(entry.status);
+        const statusLabel = getScheduleStatusLabel(entry.status);
+        const durationMin = getScheduleDurationMin(entry);
+        const endTime = computeScheduleEndTime(entry.time, durationMin);
+        const timeRange = endTime
+          ? (String(entry.time || '--:--') + '-' + endTime)
+          : String(entry.time || '--:--');
+
+        return '<button type="button" class="admin-mobile-slot admin-existing-row admin-existing-row-clickable ' + statusClass + '" data-schedule-edit="' + escapeHtml(entry.id || '') + '"><strong>' + escapeHtml(timeRange) + ' • ' + escapeHtml(entry.clientName || 'Client inconnu') + '</strong><span>' + escapeHtml(statusLabel) + ' • ' + escapeHtml(formatDurationLabel(durationMin)) + '</span></button>';
+      }).join('')
+      : '<p class="admin-mobile-empty">Aucun rendez-vous prévu.</p>';
+
+    const openAttr = (day.key === todayKey || (index === 0 && todayKey < weekDays[0].key)) ? ' open' : '';
+    const countLabel = dayEntries.length + ' rendez-vous';
+
+    return '<details class="admin-mobile-day"' + openAttr + '><summary class="admin-mobile-day-summary"><strong>' + escapeHtml(dayLabel) + '</strong><span>' + escapeHtml(countLabel) + '</span></summary><div class="admin-mobile-day-body"><div class="admin-mobile-day-list">' + rows + '</div></div></details>';
+  }).join('');
+
+  planner.innerHTML =
+    '<div class="admin-week-head"><strong>' + escapeHtml(weekTitle) + '</strong><div class="admin-week-head-right"><span>Planning semaine</span><div class="admin-planner-stats"><span class="admin-planner-stat">Aujourd\'hui: ' + escapeHtml(String(todayReservations)) + '</span><span class="admin-planner-stat">Semaine: ' + escapeHtml(String(weekReservations)) + '</span><span class="admin-planner-stat">Total: ' + escapeHtml(String(totalReservations)) + '</span></div><div class="admin-week-nav"><button type="button" class="add-btn admin-week-nav-btn" data-schedule-week-nav="prev" aria-label="Semaine precedente">&#8592;</button><button type="button" class="add-btn admin-week-nav-btn is-today" data-schedule-week-nav="today" aria-label="Revenir a la semaine en cours">Aujourd\'hui</button><button type="button" class="add-btn admin-week-nav-btn" data-schedule-week-nav="next" aria-label="Semaine suivante">&#8594;</button></div></div></div>' +
+    '<div class="admin-mobile-week">' + mobileDaysMarkup + '</div>' +
+    emptyHint +
+    outsideMarkup;
+}
+
+function renderAdminLists() {
+  const defaultProductList = document.getElementById('admin-default-products-list');
+  const defaultRealList = document.getElementById('admin-default-reals-list');
+  const featuredProductsList = document.getElementById('admin-featured-products-list');
+  const featuredList = document.getElementById('admin-featured-list');
+  if (!defaultProductList || !defaultRealList) return;
+
+  const products = customProductsState;
+  const reals = customRealisationsState;
+  const hiddenDefaultProducts = hiddenDefaultProductsState;
+  const hiddenDefaultReals = hiddenDefaultRealisationsState;
+
+  const defaultProductRows = DEFAULT_PRODUCT_ITEMS.map((item) => {
+    const merged = getMergedDefaultProduct(item.id) || item;
+    const hidden = hiddenDefaultProducts.includes(item.id);
+    return '<div class="admin-row"><div><strong>' + escapeHtml(merged.name) + '</strong><span>' + escapeHtml(item.id) + '</span></div><div class="admin-row-actions"><button class="add-btn" data-edit-default-product="' + escapeHtml(item.id) + '">Modifier</button><button class="add-btn" data-toggle-default-product="' + escapeHtml(item.id) + '">' + (hidden ? 'Restaurer' : 'Supprimer') + '</button></div></div>';
+  });
+
+  const customProductRows = products.map((item) => {
+    return '<div class="admin-row"><div><strong>' + escapeHtml(item.name) + '</strong><span>Personnalisé • ' + escapeHtml(item.category) + ' • ' + Number(item.price).toFixed(2).replace('.', ',') + '€</span></div><div class="admin-row-actions"><button class="add-btn" data-edit-product="' + escapeHtml(item.id) + '">Modifier</button><button class="add-btn" data-remove-product="' + escapeHtml(item.id) + '">Supprimer</button></div></div>';
+  });
+
+  defaultProductList.innerHTML = defaultProductRows.concat(customProductRows).join('');
+
+  if (featuredProductsList) {
+    const options = getMergedDefaultProductsCatalog()
+      .filter((item) => !hiddenDefaultProducts.includes(item.id))
+      .concat(
+        customProductsState.map((item) => ({
+          id: item.id,
+          name: item.name,
+          category: item.category
+        }))
+      );
+
+    featuredProductsList.innerHTML = options.map((item) => {
+      const checked = getEffectiveFeaturedProductIds().includes(item.id) ? 'checked' : '';
+      return '<label class="admin-row"><div><strong>' + escapeHtml(item.name || 'Produit') + '</strong><span>' + escapeHtml(item.category || 'Produit') + '</span></div><input type="checkbox" data-featured-product-id="' + escapeHtml(item.id) + '" ' + checked + '></label>';
+    }).join('');
+  }
+
+  const defaultRealRows = DEFAULT_REALISATION_ITEMS.map((item) => {
+    const merged = getMergedDefaultRealisation(item.id) || item;
+    const hidden = hiddenDefaultReals.includes(item.id);
+    return '<div class="admin-row"><div><strong>' + escapeHtml(merged.title || merged.name) + '</strong><span>' + escapeHtml(item.id) + '</span></div><div class="admin-row-actions"><button class="add-btn" data-edit-default-real="' + escapeHtml(item.id) + '">Modifier</button><button class="add-btn" data-toggle-default-real="' + escapeHtml(item.id) + '">' + (hidden ? 'Restaurer' : 'Supprimer') + '</button></div></div>';
+  });
+
+  const customRealRows = reals.map((item) => {
+    return '<div class="admin-row"><div><strong>' + escapeHtml(item.title) + '</strong><span>Personnalisé • ' + escapeHtml(item.style) + '</span></div><div class="admin-row-actions"><button class="add-btn" data-edit-real="' + escapeHtml(item.id) + '">Modifier</button><button class="add-btn" data-remove-real="' + escapeHtml(item.id) + '">Supprimer</button></div></div>';
+  });
+
+  defaultRealList.innerHTML = defaultRealRows.concat(customRealRows).join('');
+
+  if (featuredList) {
+    const options = getMergedDefaultRealisationsCatalog().concat(
+      customRealisationsState.map((item) => ({
+        id: item.id,
+        title: item.title,
+        style: item.style
+      }))
+    );
+
+    featuredList.innerHTML = options.map((item) => {
+      const checked = getEffectiveFeaturedRealisationIds().includes(item.id) ? 'checked' : '';
+      return '<label class="admin-row"><div><strong>' + escapeHtml(item.title || item.name) + '</strong><span>' + escapeHtml(item.style || '') + '</span></div><input type="checkbox" data-featured-id="' + escapeHtml(item.id) + '" ' + checked + '></label>';
+    }).join('');
+  }
+
+  renderAdminSchedulePlanner();
+
+}
+
+function initAdminBackoffice() {
+  const page = document.getElementById('page-admin');
+  if (!page) return;
+
+  const loginWrap = document.getElementById('admin-login-wrap');
+  const panel = document.getElementById('admin-panel');
+  const loginBtn = document.getElementById('admin-login-btn');
+  const passwordInput = document.getElementById('admin-password');
+  const loginFeedback = document.getElementById('admin-login-feedback');
+  const homeCard = document.getElementById('admin-home');
+  const moduleProducts = document.getElementById('admin-module-products');
+  const moduleReals = document.getElementById('admin-module-reals');
+  const moduleSchedule = document.getElementById('admin-module-schedule');
+  const productFormTitle = document.getElementById('admin-product-form-title');
+  const realFormTitle = document.getElementById('admin-real-form-title');
+  const cancelProductEditBtn = document.getElementById('admin-cancel-product-edit');
+  const cancelRealEditBtn = document.getElementById('admin-cancel-real-edit');
+
+  const productNameInput = document.getElementById('admin-product-name');
+  const productShortInput = document.getElementById('admin-product-short');
+  const productPriceInput = document.getElementById('admin-product-price');
+  const productOldPriceInput = document.getElementById('admin-product-old-price');
+  const productCategoryInput = document.getElementById('admin-product-category');
+  const productBadgeInput = document.getElementById('admin-product-badge');
+  const productOptionLabelInput = document.getElementById('admin-product-option-label');
+  const productOptionsInput = document.getElementById('admin-product-options');
+  const productDetailsInput = document.getElementById('admin-product-details');
+  const productImageUrlInput = document.getElementById('admin-product-image-url');
+  const productImageFileInput = document.getElementById('admin-product-image-file');
+
+  const realTitleInput = document.getElementById('admin-real-title');
+  const realStyleInput = document.getElementById('admin-real-style');
+  const realImageUrlInput = document.getElementById('admin-real-image-url');
+  const realImageFileInput = document.getElementById('admin-real-image-file');
+
+  const scheduleModal = document.getElementById('admin-schedule-modal');
+  const scheduleModalTitle = document.getElementById('admin-schedule-modal-title');
+  const openScheduleModalBtn = document.getElementById('admin-open-schedule-modal');
+  const closeScheduleModalBtn = document.getElementById('admin-close-schedule-modal');
+  const cancelScheduleModalBtn = document.getElementById('admin-cancel-schedule-modal');
+  const addScheduleBtn = document.getElementById('admin-add-schedule');
+  const deleteScheduleBtn = document.getElementById('admin-delete-schedule');
+  const scheduleClientInput = document.getElementById('admin-schedule-client');
+  const scheduleDateInput = document.getElementById('admin-schedule-date');
+  const scheduleTimeInput = document.getElementById('admin-schedule-time');
+  const scheduleDurationInput = document.getElementById('admin-schedule-duration');
+  const scheduleStatusInput = document.getElementById('admin-schedule-status');
+  const scheduleNoteInput = document.getElementById('admin-schedule-note');
+  const scheduleSlotInfo = document.getElementById('admin-schedule-slot-info');
+  const scheduleOverlapWarning = document.getElementById('admin-schedule-overlap-warning');
+  const scheduleExisting = document.getElementById('admin-schedule-existing');
+  const scheduleAttachments = document.getElementById('admin-schedule-attachments');
+  const schedulePlanner = document.getElementById('admin-schedule-planner');
+  let editingScheduleId = null;
+
+  const resetProductForm = () => {
+    editingProductId = null;
+    editingProductMode = null;
+    if (productFormTitle) productFormTitle.textContent = 'Ajouter un produit';
+    if (addProductBtn) addProductBtn.textContent = 'Ajouter le produit';
+    if (cancelProductEditBtn) cancelProductEditBtn.style.display = 'none';
+
+    if (productNameInput) productNameInput.value = '';
+    if (productShortInput) productShortInput.value = '';
+    if (productPriceInput) productPriceInput.value = '';
+    if (productOldPriceInput) productOldPriceInput.value = '';
+    if (productCategoryInput) productCategoryInput.value = 'modeles';
+    if (productBadgeInput) productBadgeInput.value = '';
+    if (productOptionLabelInput) productOptionLabelInput.value = '';
+    if (productOptionsInput) productOptionsInput.value = '';
+    if (productDetailsInput) productDetailsInput.value = '';
+    if (productImageUrlInput) productImageUrlInput.value = '';
+    if (productImageFileInput) productImageFileInput.value = '';
+  };
+
+  const resetRealForm = () => {
+    editingRealId = null;
+    editingRealMode = null;
+    if (realFormTitle) realFormTitle.textContent = 'Ajouter une réalisation';
+    if (addRealBtn) addRealBtn.textContent = 'Ajouter la réalisation';
+    if (cancelRealEditBtn) cancelRealEditBtn.style.display = 'none';
+
+    if (realTitleInput) realTitleInput.value = '';
+    if (realStyleInput) realStyleInput.value = 'Géométrique';
+    if (realImageUrlInput) realImageUrlInput.value = '';
+    if (realImageFileInput) realImageFileInput.value = '';
+  };
+
+  const resetScheduleForm = () => {
+    editingScheduleId = null;
+    if (scheduleModalTitle) scheduleModalTitle.textContent = 'Ajouter un créneau planning';
+    if (addScheduleBtn) addScheduleBtn.textContent = 'Ajouter au planning';
+    if (deleteScheduleBtn) deleteScheduleBtn.style.display = 'none';
+    if (scheduleClientInput) scheduleClientInput.value = '';
+    if (scheduleDateInput) scheduleDateInput.value = '';
+    if (scheduleTimeInput) scheduleTimeInput.value = '';
+    if (scheduleDurationInput) scheduleDurationInput.value = '120';
+    if (scheduleStatusInput) scheduleStatusInput.value = 'en-attente';
+    if (scheduleNoteInput) scheduleNoteInput.value = '';
+    if (scheduleOverlapWarning) {
+      scheduleOverlapWarning.textContent = '';
+      scheduleOverlapWarning.classList.remove('show');
+    }
+    if (scheduleAttachments) scheduleAttachments.innerHTML = '';
+  };
+
+  const parseTimeToMinutes = (value) => {
+    const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return (hour * 60) + minute;
+  };
+
+  const renderScheduleOverlapWarning = () => {
+    if (!scheduleOverlapWarning) return;
+
+    const dateValue = scheduleDateInput?.value?.trim() || '';
+    const timeValue = scheduleTimeInput?.value?.trim() || '';
+    const durationMin = Math.max(30, Number(scheduleDurationInput?.value || 120));
+    const start = parseTimeToMinutes(timeValue);
+
+    if (!dateValue || start === null) {
+      scheduleOverlapWarning.textContent = '';
+      scheduleOverlapWarning.classList.remove('show');
+      return;
+    }
+
+    const end = start + (Number.isFinite(durationMin) ? durationMin : 120);
+    const overlaps = scheduleEntriesState
+      .filter((entry) => String(entry.date || '') === dateValue)
+      .filter((entry) => String(entry.id || '') !== String(editingScheduleId || ''))
+      .filter((entry) => {
+        const otherStart = parseTimeToMinutes(entry.time);
+        if (otherStart === null) return false;
+        const otherDuration = getScheduleDurationMin(entry);
+        const otherEnd = otherStart + otherDuration;
+        return start < otherEnd && end > otherStart;
+      })
+      .sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
+
+    if (!overlaps.length) {
+      scheduleOverlapWarning.textContent = '';
+      scheduleOverlapWarning.classList.remove('show');
+      return;
+    }
+
+    const labels = overlaps.slice(0, 3).map((entry) => String(entry.time || '--:--') + ' • ' + String(entry.clientName || 'Client inconnu'));
+    const suffix = overlaps.length > 3 ? ' et ' + (overlaps.length - 3) + ' autre(s)' : '';
+
+    scheduleOverlapWarning.textContent = 'Attention: chevauchement détecté avec ' + labels.join(', ') + suffix + '.';
+    scheduleOverlapWarning.classList.add('show');
+  };
+
+  const renderScheduleAttachments = (entry) => {
+    if (!scheduleAttachments) return;
+
+    const attachments = Array.isArray(entry?.attachments)
+      ? entry.attachments.filter((item) => String(item?.dataUrl || '').startsWith('data:image/'))
+      : [];
+
+    if (!attachments.length) {
+      scheduleAttachments.innerHTML = '<p style="font-size:11px;color:var(--muted)">Aucune image jointe pour ce créneau.</p>';
+      return;
+    }
+
+    const images = attachments.map((item, index) => {
+      const src = escapeHtml(String(item.dataUrl || ''));
+      const alt = escapeHtml(String(item.name || ('Image ' + (index + 1))));
+      return '<a class="admin-attachment-item" href="' + src + '" target="_blank" rel="noopener noreferrer"><img src="' + src + '" alt="' + alt + '"></a>';
+    }).join('');
+
+    scheduleAttachments.innerHTML = '<p class="admin-attachments-title">Images du client</p><div class="admin-attachments-grid">' + images + '</div>';
+  };
+
+  const renderScheduleExistingForSlot = (dateValue, timeValue) => {
+    if (!scheduleExisting || !scheduleSlotInfo) return;
+
+    if (!dateValue || !timeValue) {
+      scheduleSlotInfo.textContent = 'Sélectionnez une date et une heure pour voir les créneaux prévus.';
+      scheduleExisting.innerHTML = '<p style="font-size:11px;color:var(--muted)">Aucun créneau sélectionné.</p>';
+      return;
+    }
+
+    const slotLabelDate = new Date(dateValue + 'T00:00:00');
+    const humanDate = Number.isNaN(slotLabelDate.getTime())
+      ? dateValue
+      : slotLabelDate.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+    scheduleSlotInfo.textContent = 'Créneau sélectionné : ' + humanDate + ' à ' + timeValue;
+
+    const entries = scheduleEntriesState
+      .filter((entry) => String(entry.date || '') === dateValue && String(entry.time || '') === timeValue)
+      .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+
+    if (!entries.length) {
+      scheduleExisting.innerHTML = '<p style="font-size:11px;color:var(--muted)">Aucun rendez-vous prévu sur ce créneau.</p>';
+      return;
+    }
+
+    scheduleExisting.innerHTML = entries.map((entry) => {
+      const statusClass = getScheduleStatusClass(entry.status);
+      const durationMin = getScheduleDurationMin(entry);
+      const note = String(entry.note || '').trim();
+      const noteMarkup = note ? '<span class="admin-existing-note">' + escapeHtml(note) + '</span>' : '';
+      return '<button type="button" class="admin-existing-row admin-existing-row-clickable ' + statusClass + '" data-schedule-edit="' + escapeHtml(entry.id || '') + '"><strong>' + escapeHtml(entry.clientName || 'Client inconnu') + '</strong><span>' + escapeHtml(getScheduleStatusLabel(entry.status)) + ' • ' + escapeHtml(formatDurationLabel(durationMin)) + '</span>' + noteMarkup + '</button>';
+    }).join('');
+  };
+
+  const closeScheduleModal = () => {
+    if (!scheduleModal) return;
+    scheduleModal.classList.remove('open');
+    scheduleModal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  };
+
+  const openScheduleModal = (options) => {
+    if (!scheduleModal) return;
+
+    const dateValue = options && options.date ? options.date : '';
+    const timeValue = options && options.time ? options.time : '';
+
+    resetScheduleForm();
+    if (scheduleDateInput && dateValue) scheduleDateInput.value = dateValue;
+    if (scheduleTimeInput && timeValue) scheduleTimeInput.value = timeValue;
+    renderScheduleExistingForSlot(scheduleDateInput?.value || '', scheduleTimeInput?.value || '');
+    renderScheduleOverlapWarning();
+    if (scheduleAttachments) scheduleAttachments.innerHTML = '';
+
+    scheduleModal.classList.add('open');
+    scheduleModal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    scheduleClientInput?.focus();
+  };
+
+  const openScheduleModalForEdit = (entryId) => {
+    const entry = scheduleEntriesState.find((item) => item.id === entryId);
+    if (!entry) {
+      showAdminFeedback('Créneau introuvable.', 'err');
+      return;
+    }
+
+    resetScheduleForm();
+    editingScheduleId = entry.id;
+    if (scheduleModalTitle) scheduleModalTitle.textContent = 'Modifier le créneau planning';
+    if (addScheduleBtn) addScheduleBtn.textContent = 'Enregistrer les modifications';
+    if (deleteScheduleBtn) deleteScheduleBtn.style.display = 'inline-flex';
+
+    if (scheduleClientInput) scheduleClientInput.value = String(entry.clientName || '');
+    if (scheduleDateInput) scheduleDateInput.value = String(entry.date || '');
+    if (scheduleTimeInput) scheduleTimeInput.value = String(entry.time || '');
+    if (scheduleDurationInput) scheduleDurationInput.value = String(entry.durationMin || 120);
+    if (scheduleStatusInput) scheduleStatusInput.value = String(entry.status || 'en-attente');
+    if (scheduleNoteInput) scheduleNoteInput.value = String(entry.note || '');
+    renderScheduleExistingForSlot(scheduleDateInput?.value || '', scheduleTimeInput?.value || '');
+    renderScheduleOverlapWarning();
+    renderScheduleAttachments(entry);
+
+    scheduleModal.classList.add('open');
+    scheduleModal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    scheduleClientInput?.focus();
+  };
+
+  const setLoginFeedback = (message, type) => {
+    if (!loginFeedback) return;
+    loginFeedback.textContent = message;
+    loginFeedback.classList.add('show');
+    loginFeedback.classList.remove('ok', 'err');
+    loginFeedback.classList.add(type === 'ok' ? 'ok' : 'err');
+  };
+
+  const showAdminModule = (target) => {
+    const key = target || 'home';
+    if (homeCard) homeCard.style.display = key === 'home' ? '' : 'none';
+    if (moduleProducts) moduleProducts.style.display = key === 'products' ? '' : 'none';
+    if (moduleReals) moduleReals.style.display = key === 'reals' ? '' : 'none';
+    if (moduleSchedule) moduleSchedule.style.display = key === 'schedule' ? '' : 'none';
+  };
+
+  const unlockPanel = async () => {
+    if (loginWrap) loginWrap.style.display = 'none';
+    if (panel) panel.style.display = 'grid';
+    await refreshContentState();
+    renderAdminLists();
+    showAdminModule('home');
+  };
+
+  page.querySelectorAll('[data-admin-target]').forEach((btn) => {
+    btn.addEventListener('click', () => showAdminModule(btn.dataset.adminTarget));
+  });
+
+  if (sessionStorage.getItem(ADMIN_SESSION_KEY) === 'ok') {
+    unlockPanel().catch(() => {
+      loadStateFromLocalStorage();
+      renderAdminLists();
+    });
+  }
+
+  loginBtn?.addEventListener('click', async () => {
+    const password = passwordInput?.value || '';
+
+    if (!password) {
+      setLoginFeedback('Mot de passe requis.', 'err');
+      return;
+    }
+
+    const serverReachable = await tryLoadStateFromServer();
+    if (serverReachable) {
+      try {
+        await fetchJson('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+      } catch (error) {
+        setLoginFeedback('Mot de passe incorrect.', 'err');
+        return;
+      }
+    } else if (password !== ADMIN_PASSWORD) {
+      setLoginFeedback('Mot de passe incorrect.', 'err');
+      return;
+    }
+
+    sessionStorage.setItem(ADMIN_SESSION_KEY, 'ok');
+    sessionStorage.setItem(ADMIN_PASSWORD_SESSION_KEY, password);
+    setLoginFeedback('Connexion réussie.', 'ok');
+    await unlockPanel();
+  });
+
+  const addProductBtn = document.getElementById('admin-add-product');
+  addProductBtn?.addEventListener('click', async () => {
+    const name = productNameInput?.value?.trim() || '';
+    const shortDesc = productShortInput?.value?.trim() || '';
+    const priceRaw = productPriceInput?.value?.trim() || '';
+    const oldPriceRaw = productOldPriceInput?.value?.trim() || '';
+    const category = productCategoryInput?.value || 'modeles';
+    const badge = productBadgeInput?.value?.trim() || '';
+    const optionLabel = productOptionLabelInput?.value?.trim() || '';
+    const options = productOptionsInput?.value?.trim() || '';
+    const details = productDetailsInput?.value?.trim() || '';
+    const imageUrl = productImageUrlInput?.value?.trim() || '';
+    const imageFile = productImageFileInput?.files?.[0] || null;
+
+    const price = Number(priceRaw.replace(',', '.'));
+    const oldPrice = Number(oldPriceRaw.replace(',', '.'));
+
+    if (!name || !Number.isFinite(price) || price <= 0) {
+      showAdminFeedback('Produit: nom et prix valide sont requis.', 'err');
+      return;
+    }
+
+    const existingProduct = editingProductId
+      ? (editingProductMode === 'default'
+        ? getMergedDefaultProduct(editingProductId)
+        : customProductsState.find((item) => item.id === editingProductId))
+      : null;
+
+    let imageSrc = imageUrl || (existingProduct?.imageSrc || '');
+    if (!imageSrc && imageFile) {
+      try {
+        imageSrc = await readFileAsDataUrl(imageFile);
+      } catch (error) {
+        showAdminFeedback('Impossible de lire l\'image sélectionnée.', 'err');
+        return;
+      }
+    }
+
+    const productPayload = {
+      id: editingProductId || ('prod-' + Date.now().toString(36)),
+      sku: existingProduct?.sku || editingProductId || ('CUSTOM-' + Date.now().toString(36)),
+      supplier: 'Back-office',
+      name,
+      shortDesc,
+      details: details || name,
+      price,
+      oldPrice: Number.isFinite(oldPrice) && oldPrice > 0 ? oldPrice : null,
+      category,
+      badge,
+      optionLabel,
+      options,
+      imageSrc
+    };
+
+    if (serverAdminAvailable) {
+      try {
+        let data;
+        if (!editingProductId) {
+          data = await adminApi('/api/admin/products', 'POST', productPayload);
+        } else if (editingProductMode === 'default') {
+          data = await adminApi('/api/admin/default-products/' + encodeURIComponent(editingProductId), 'PUT', productPayload);
+        } else {
+          data = await adminApi('/api/admin/products/' + encodeURIComponent(editingProductId), 'PUT', productPayload);
+        }
+        applyContentState(data);
+      } catch (error) {
+        showAdminFeedback('Impossible d\'enregistrer le produit côté serveur.', 'err');
+        return;
+      }
+    } else {
+      if (editingProductId && editingProductMode === 'default') {
+        defaultProductOverridesState[editingProductId] = {
+          ...defaultProductOverridesState[editingProductId],
+          ...productPayload
+        };
+      } else if (editingProductId) {
+        customProductsState = customProductsState.map((item) => item.id === editingProductId ? { ...item, ...productPayload } : item);
+      } else {
+        customProductsState = customProductsState.concat(productPayload);
+      }
+      persistStateToLocalStorage();
+    }
+
+    applyDefaultOverridesOnPublicPages();
+    renderAdminLists();
+    showAdminFeedback(editingProductId ? 'Produit modifié.' : 'Produit ajouté. Il apparaîtra dans la boutique.', 'ok');
+    resetProductForm();
+  });
+
+  const addRealBtn = document.getElementById('admin-add-real');
+  addRealBtn?.addEventListener('click', async () => {
+    const title = realTitleInput?.value?.trim() || '';
+    const style = realStyleInput?.value?.trim() || 'Flash custom';
+    const imageUrl = realImageUrlInput?.value?.trim() || '';
+    const imageFile = realImageFileInput?.files?.[0] || null;
+
+    if (!title) {
+      showAdminFeedback('Réalisation: le titre est requis.', 'err');
+      return;
+    }
+
+    const existingReal = editingRealId
+      ? (editingRealMode === 'default'
+        ? getMergedDefaultRealisation(editingRealId)
+        : customRealisationsState.find((item) => item.id === editingRealId))
+      : null;
+
+    let imageSrc = imageUrl || (existingReal?.imageSrc || '');
+    if (!imageSrc && imageFile) {
+      try {
+        imageSrc = await readFileAsDataUrl(imageFile);
+      } catch (error) {
+        showAdminFeedback('Impossible de lire l\'image sélectionnée.', 'err');
+        return;
+      }
+    }
+
+    const realPayload = {
+      id: editingRealId || ('real-' + Date.now().toString(36)),
+      title,
+      style,
+      imageSrc
+    };
+
+    if (serverAdminAvailable) {
+      try {
+        let data;
+        if (!editingRealId) {
+          data = await adminApi('/api/admin/realisations', 'POST', realPayload);
+        } else if (editingRealMode === 'default') {
+          data = await adminApi('/api/admin/default-realisations/' + encodeURIComponent(editingRealId), 'PUT', realPayload);
+        } else {
+          data = await adminApi('/api/admin/realisations/' + encodeURIComponent(editingRealId), 'PUT', realPayload);
+        }
+        applyContentState(data);
+      } catch (error) {
+        showAdminFeedback('Impossible d\'enregistrer la réalisation côté serveur.', 'err');
+        return;
+      }
+    } else {
+      if (editingRealId && editingRealMode === 'default') {
+        defaultRealisationOverridesState[editingRealId] = {
+          ...defaultRealisationOverridesState[editingRealId],
+          ...realPayload
+        };
+      } else if (editingRealId) {
+        customRealisationsState = customRealisationsState.map((item) => item.id === editingRealId ? { ...item, ...realPayload } : item);
+      } else {
+        customRealisationsState = customRealisationsState.concat(realPayload);
+      }
+      persistStateToLocalStorage();
+    }
+
+    applyDefaultOverridesOnPublicPages();
+    renderAdminLists();
+    showAdminFeedback(editingRealId ? 'Réalisation modifiée.' : 'Réalisation ajoutée. Elle apparaîtra dans la galerie.', 'ok');
+    resetRealForm();
+  });
+
+  cancelProductEditBtn?.addEventListener('click', resetProductForm);
+  cancelRealEditBtn?.addEventListener('click', resetRealForm);
+
+  openScheduleModalBtn?.addEventListener('click', openScheduleModal);
+  closeScheduleModalBtn?.addEventListener('click', closeScheduleModal);
+  cancelScheduleModalBtn?.addEventListener('click', () => {
+    closeScheduleModal();
+    resetScheduleForm();
+  });
+
+  scheduleModal?.addEventListener('click', (event) => {
+    if (event.target === scheduleModal) closeScheduleModal();
+  });
+
+  scheduleDateInput?.addEventListener('change', () => {
+    renderScheduleExistingForSlot(scheduleDateInput.value, scheduleTimeInput?.value || '');
+    renderScheduleOverlapWarning();
+  });
+
+  scheduleTimeInput?.addEventListener('change', () => {
+    renderScheduleExistingForSlot(scheduleDateInput?.value || '', scheduleTimeInput.value);
+    renderScheduleOverlapWarning();
+  });
+
+  scheduleDurationInput?.addEventListener('change', () => {
+    renderScheduleOverlapWarning();
+  });
+
+  schedulePlanner?.addEventListener('click', (event) => {
+    const daySummary = event.target instanceof HTMLElement
+      ? event.target.closest('.admin-mobile-day-summary')
+      : null;
+    if (daySummary) {
+      const currentDay = daySummary.closest('.admin-mobile-day');
+      if (currentDay) {
+        requestAnimationFrame(() => {
+          if (!currentDay.open) return;
+          schedulePlanner.querySelectorAll('.admin-mobile-day[open]').forEach((item) => {
+            if (item !== currentDay) item.open = false;
+          });
+        });
+      }
+      return;
+    }
+
+    const navButton = event.target instanceof HTMLElement
+      ? event.target.closest('[data-schedule-week-nav]')
+      : null;
+    if (navButton) {
+      const action = navButton.getAttribute('data-schedule-week-nav');
+      const current = new Date((adminPlannerWeekStartState || '') + 'T00:00:00');
+      const fallback = new Date();
+      fallback.setHours(0, 0, 0, 0);
+      const base = Number.isNaN(current.getTime()) ? fallback : current;
+
+      if (action === 'today') {
+        const today = new Date();
+        const day = today.getDay();
+        const diffToMonday = day === 0 ? -6 : 1 - day;
+        today.setDate(today.getDate() + diffToMonday);
+        today.setHours(0, 0, 0, 0);
+        adminPlannerWeekStartState = toLocalDateKey(today);
+      } else {
+        base.setDate(base.getDate() + (action === 'prev' ? -7 : 7));
+        adminPlannerWeekStartState = toLocalDateKey(base);
+      }
+
+      renderAdminSchedulePlanner();
+      event.stopPropagation();
+      return;
+    }
+
+    const scheduleEditChip = event.target instanceof HTMLElement
+      ? event.target.closest('[data-schedule-edit]')
+      : null;
+    if (scheduleEditChip) {
+      const scheduleEditId = scheduleEditChip.getAttribute('data-schedule-edit') || '';
+      if (scheduleEditId) {
+        openScheduleModalForEdit(scheduleEditId);
+        event.stopPropagation();
+      }
+      return;
+    }
+
+    const cell = event.target instanceof HTMLElement
+      ? event.target.closest('.admin-week-cell-clickable')
+      : null;
+    if (!cell) return;
+
+    const dateValue = cell.getAttribute('data-schedule-date') || '';
+    const hourValue = cell.getAttribute('data-schedule-hour') || '';
+    if (!dateValue || !hourValue) return;
+
+    openScheduleModal({ date: dateValue, time: hourValue });
+    event.stopPropagation();
+  });
+
+  document.getElementById('admin-save-featured')?.addEventListener('click', async () => {
+    const ids = Array.from(page.querySelectorAll('[data-featured-id]:checked'))
+      .map((input) => input.dataset.featuredId)
+      .filter(Boolean)
+      .slice(0, 4);
+
+    if (serverAdminAvailable) {
+      try {
+        const data = await adminApi('/api/admin/featured-realisations', 'PUT', { ids });
+        applyContentState(data);
+      } catch (error) {
+        showAdminFeedback('Enregistrement des dernières réalisations impossible.', 'err');
+        return;
+      }
+    } else {
+      featuredRealisationsState = ids;
+      persistStateToLocalStorage();
+    }
+
+    renderAdminLists();
+    showAdminFeedback('Dernières réalisations mises à jour.', 'ok');
+  });
+
+  document.getElementById('admin-save-featured-products')?.addEventListener('click', async () => {
+    const ids = Array.from(page.querySelectorAll('[data-featured-product-id]:checked'))
+      .map((input) => input.dataset.featuredProductId)
+      .filter(Boolean)
+      .slice(0, 3);
+
+    if (serverAdminAvailable) {
+      try {
+        const data = await adminApi('/api/admin/featured-products', 'PUT', { ids });
+        applyContentState(data);
+      } catch (error) {
+        showAdminFeedback('Enregistrement des best-sellers impossible.', 'err');
+        return;
+      }
+    } else {
+      featuredProductsState = ids;
+      persistStateToLocalStorage();
+    }
+
+    renderAdminLists();
+    showAdminFeedback('Best-sellers mis a jour.', 'ok');
+  });
+
+  addScheduleBtn?.addEventListener('click', async () => {
+    const clientName = scheduleClientInput?.value?.trim() || '';
+    const date = scheduleDateInput?.value?.trim() || '';
+    const time = scheduleTimeInput?.value?.trim() || '';
+    const durationMin = Number(scheduleDurationInput?.value || 0);
+    const status = scheduleStatusInput?.value?.trim() || 'en-attente';
+    const note = scheduleNoteInput?.value?.trim() || '';
+
+    if (!clientName || !date || !time) {
+      showAdminFeedback('Planning: client, date et heure sont requis.', 'err');
+      return;
+    }
+
+    const payload = {
+      clientName,
+      date,
+      time,
+      durationMin: Number.isFinite(durationMin) && durationMin > 0 ? durationMin : 120,
+      status,
+      note
+    };
+    if (serverAdminAvailable) {
+      try {
+        const data = editingScheduleId
+          ? await adminApi('/api/admin/schedule/' + encodeURIComponent(editingScheduleId), 'PUT', payload)
+          : await adminApi('/api/admin/schedule', 'POST', payload);
+        applyContentState(data);
+      } catch (error) {
+        showAdminFeedback(editingScheduleId ? 'Mise a jour du planning impossible cote serveur.' : 'Ajout au planning impossible cote serveur.', 'err');
+        return;
+      }
+    } else {
+      if (editingScheduleId) {
+        scheduleEntriesState = scheduleEntriesState.map((entry) => (
+          entry.id === editingScheduleId
+            ? { ...entry, ...payload }
+            : entry
+        ));
+      } else {
+        scheduleEntriesState = scheduleEntriesState.concat({ id: 'sch-' + Date.now().toString(36), ...payload });
+      }
+      persistStateToLocalStorage();
+    }
+
+    renderAdminLists();
+    showAdminFeedback(editingScheduleId ? 'Créneau mis à jour.' : 'Créneau ajouté au planning.', 'ok');
+    closeScheduleModal();
+    resetScheduleForm();
+  });
+
+  deleteScheduleBtn?.addEventListener('click', async () => {
+    if (!editingScheduleId) return;
+
+    const confirmed = window.confirm('Supprimer ce créneau ? Cette action est irréversible.');
+    if (!confirmed) return;
+
+    const scheduleId = editingScheduleId;
+
+    if (serverAdminAvailable) {
+      try {
+        const data = await adminApi('/api/admin/schedule/' + encodeURIComponent(scheduleId), 'DELETE');
+        applyContentState(data);
+      } catch (error) {
+        showAdminFeedback('Suppression planning impossible côté serveur.', 'err');
+        return;
+      }
+    } else {
+      scheduleEntriesState = scheduleEntriesState.filter((entry) => entry.id !== scheduleId);
+      persistStateToLocalStorage();
+    }
+
+    renderAdminLists();
+    showAdminFeedback('Créneau supprimé.', 'ok');
+    closeScheduleModal();
+    resetScheduleForm();
+  });
+
+  page.addEventListener('click', async (event) => {
+    const scheduleEditTarget = event.target instanceof HTMLElement
+      ? event.target.closest('[data-schedule-edit]')
+      : null;
+    const removeProductId = event.target?.dataset?.removeProduct;
+    const removeRealId = event.target?.dataset?.removeReal;
+    const editProductId = event.target?.dataset?.editProduct;
+    const editRealId = event.target?.dataset?.editReal;
+    const editDefaultProductId = event.target?.dataset?.editDefaultProduct;
+    const editDefaultRealId = event.target?.dataset?.editDefaultReal;
+    const toggleDefaultProductId = event.target?.dataset?.toggleDefaultProduct;
+    const toggleDefaultRealId = event.target?.dataset?.toggleDefaultReal;
+    const scheduleDeleteId = event.target?.dataset?.scheduleDelete;
+    const scheduleStatusId = event.target?.dataset?.scheduleStatus;
+    const scheduleEditId = scheduleEditTarget?.dataset?.scheduleEdit;
+
+    if (editDefaultProductId) {
+      const item = getMergedDefaultProduct(editDefaultProductId);
+      if (!item) return;
+
+      editingProductId = item.id;
+      editingProductMode = 'default';
+      if (productFormTitle) productFormTitle.textContent = 'Modifier un produit du site';
+      if (addProductBtn) addProductBtn.textContent = 'Enregistrer le produit';
+      if (cancelProductEditBtn) cancelProductEditBtn.style.display = 'inline-flex';
+
+      if (productNameInput) productNameInput.value = item.name || '';
+      if (productShortInput) productShortInput.value = item.shortDesc || '';
+      if (productPriceInput) productPriceInput.value = String(item.price || '');
+      if (productOldPriceInput) productOldPriceInput.value = item.oldPrice ? String(item.oldPrice) : '';
+      if (productCategoryInput) productCategoryInput.value = item.category || 'modeles';
+      if (productBadgeInput) productBadgeInput.value = item.badge || '';
+      if (productOptionLabelInput) productOptionLabelInput.value = item.optionLabel || '';
+      if (productOptionsInput) productOptionsInput.value = item.options || '';
+      if (productDetailsInput) productDetailsInput.value = item.details || '';
+      if (productImageUrlInput) productImageUrlInput.value = item.imageSrc || '';
+      if (productImageFileInput) productImageFileInput.value = '';
+      return;
+    }
+
+    if (editDefaultRealId) {
+      const item = getMergedDefaultRealisation(editDefaultRealId);
+      if (!item) return;
+
+      editingRealId = item.id;
+      editingRealMode = 'default';
+      if (realFormTitle) realFormTitle.textContent = 'Modifier une réalisation du site';
+      if (addRealBtn) addRealBtn.textContent = 'Enregistrer la réalisation';
+      if (cancelRealEditBtn) cancelRealEditBtn.style.display = 'inline-flex';
+
+      if (realTitleInput) realTitleInput.value = item.title || '';
+      if (realStyleInput) realStyleInput.value = item.style || 'Flash custom';
+      if (realImageUrlInput) realImageUrlInput.value = item.imageSrc || '';
+      if (realImageFileInput) realImageFileInput.value = '';
+      return;
+    }
+
+    if (editProductId) {
+      const item = customProductsState.find((entry) => entry.id === editProductId);
+      if (!item) return;
+
+      editingProductId = item.id;
+      editingProductMode = 'custom';
+      if (productFormTitle) productFormTitle.textContent = 'Modifier un produit';
+      if (addProductBtn) addProductBtn.textContent = 'Enregistrer le produit';
+      if (cancelProductEditBtn) cancelProductEditBtn.style.display = 'inline-flex';
+
+      if (productNameInput) productNameInput.value = item.name || '';
+      if (productShortInput) productShortInput.value = item.shortDesc || '';
+      if (productPriceInput) productPriceInput.value = String(item.price || '');
+      if (productOldPriceInput) productOldPriceInput.value = item.oldPrice ? String(item.oldPrice) : '';
+      if (productCategoryInput) productCategoryInput.value = item.category || 'modeles';
+      if (productBadgeInput) productBadgeInput.value = item.badge || '';
+      if (productOptionLabelInput) productOptionLabelInput.value = item.optionLabel || '';
+      if (productOptionsInput) productOptionsInput.value = item.options || '';
+      if (productDetailsInput) productDetailsInput.value = item.details || '';
+      if (productImageUrlInput) productImageUrlInput.value = item.imageSrc || '';
+      if (productImageFileInput) productImageFileInput.value = '';
+      return;
+    }
+
+    if (editRealId) {
+      const item = customRealisationsState.find((entry) => entry.id === editRealId);
+      if (!item) return;
+
+      editingRealId = item.id;
+      editingRealMode = 'custom';
+      if (realFormTitle) realFormTitle.textContent = 'Modifier une réalisation';
+      if (addRealBtn) addRealBtn.textContent = 'Enregistrer la réalisation';
+      if (cancelRealEditBtn) cancelRealEditBtn.style.display = 'inline-flex';
+
+      if (realTitleInput) realTitleInput.value = item.title || '';
+      if (realStyleInput) realStyleInput.value = item.style || 'Flash custom';
+      if (realImageUrlInput) realImageUrlInput.value = item.imageSrc || '';
+      if (realImageFileInput) realImageFileInput.value = '';
+      return;
+    }
+
+    if (removeProductId) {
+      if (serverAdminAvailable) {
+        try {
+          const data = await adminApi('/api/admin/products/' + encodeURIComponent(removeProductId), 'DELETE');
+          applyContentState(data);
+        } catch (error) {
+          showAdminFeedback('Suppression serveur impossible.', 'err');
+          return;
+        }
+      } else {
+        customProductsState = customProductsState.filter((item) => item.id !== removeProductId);
+        persistStateToLocalStorage();
+      }
+      renderAdminLists();
+      showAdminFeedback('Produit supprimé.', 'ok');
+    }
+
+    if (removeRealId) {
+      if (serverAdminAvailable) {
+        try {
+          const data = await adminApi('/api/admin/realisations/' + encodeURIComponent(removeRealId), 'DELETE');
+          applyContentState(data);
+        } catch (error) {
+          showAdminFeedback('Suppression serveur impossible.', 'err');
+          return;
+        }
+      } else {
+        customRealisationsState = customRealisationsState.filter((item) => item.id !== removeRealId);
+        persistStateToLocalStorage();
+      }
+      renderAdminLists();
+      showAdminFeedback('Réalisation supprimée.', 'ok');
+    }
+
+    if (toggleDefaultProductId) {
+      if (serverAdminAvailable) {
+        try {
+          const data = await adminApi('/api/admin/default-products/' + encodeURIComponent(toggleDefaultProductId) + '/toggle', 'POST');
+          applyContentState(data);
+        } catch (error) {
+          showAdminFeedback('Action serveur impossible.', 'err');
+          return;
+        }
+      } else {
+        const exists = hiddenDefaultProductsState.includes(toggleDefaultProductId);
+        hiddenDefaultProductsState = exists
+          ? hiddenDefaultProductsState.filter((id) => id !== toggleDefaultProductId)
+          : hiddenDefaultProductsState.concat(toggleDefaultProductId);
+        persistStateToLocalStorage();
+      }
+
+      const exists = hiddenDefaultProductsState.includes(toggleDefaultProductId);
+      renderAdminLists();
+      showAdminFeedback(exists ? 'Produit masqué sur la boutique.' : 'Produit restauré sur la boutique.', 'ok');
+    }
+
+    if (toggleDefaultRealId) {
+      if (serverAdminAvailable) {
+        try {
+          const data = await adminApi('/api/admin/default-realisations/' + encodeURIComponent(toggleDefaultRealId) + '/toggle', 'POST');
+          applyContentState(data);
+        } catch (error) {
+          showAdminFeedback('Action serveur impossible.', 'err');
+          return;
+        }
+      } else {
+        const exists = hiddenDefaultRealisationsState.includes(toggleDefaultRealId);
+        hiddenDefaultRealisationsState = exists
+          ? hiddenDefaultRealisationsState.filter((id) => id !== toggleDefaultRealId)
+          : hiddenDefaultRealisationsState.concat(toggleDefaultRealId);
+        persistStateToLocalStorage();
+      }
+
+      const exists = hiddenDefaultRealisationsState.includes(toggleDefaultRealId);
+      renderAdminLists();
+      showAdminFeedback(exists ? 'Réalisation masquée dans la galerie.' : 'Réalisation restaurée dans la galerie.', 'ok');
+    }
+
+    if (scheduleDeleteId) {
+      if (serverAdminAvailable) {
+        try {
+          const data = await adminApi('/api/admin/schedule/' + encodeURIComponent(scheduleDeleteId), 'DELETE');
+          applyContentState(data);
+        } catch (error) {
+          showAdminFeedback('Suppression planning impossible côté serveur.', 'err');
+          return;
+        }
+      } else {
+        scheduleEntriesState = scheduleEntriesState.filter((entry) => entry.id !== scheduleDeleteId);
+        persistStateToLocalStorage();
+      }
+      renderAdminLists();
+      showAdminFeedback('Entrée planning supprimée.', 'ok');
+    }
+
+    if (scheduleStatusId) {
+      const entry = scheduleEntriesState.find((item) => item.id === scheduleStatusId);
+      if (!entry) return;
+
+      const payload = { ...entry, status: 'confirme' };
+      if (serverAdminAvailable) {
+        try {
+          const data = await adminApi('/api/admin/schedule/' + encodeURIComponent(scheduleStatusId), 'PUT', payload);
+          applyContentState(data);
+        } catch (error) {
+          showAdminFeedback('Mise à jour planning impossible côté serveur.', 'err');
+          return;
+        }
+      } else {
+        scheduleEntriesState = scheduleEntriesState.map((item) => item.id === scheduleStatusId ? { ...item, status: 'confirme' } : item);
+        persistStateToLocalStorage();
+      }
+      renderAdminLists();
+      showAdminFeedback('Créneau confirmé.', 'ok');
+    }
+
+    if (scheduleEditId) {
+      openScheduleModalForEdit(scheduleEditId);
+    }
+  });
+
+  document.getElementById('admin-clear-products')?.addEventListener('click', async () => {
+    if (serverAdminAvailable) {
+      try {
+        const data = await adminApi('/api/admin/custom-products/clear', 'POST');
+        applyContentState(data);
+      } catch (error) {
+        showAdminFeedback('Action serveur impossible.', 'err');
+        return;
+      }
+    } else {
+      customProductsState = [];
+      persistStateToLocalStorage();
+    }
+    renderAdminLists();
+    showAdminFeedback('Produits personnalisés supprimés.', 'ok');
+  });
+
+  document.getElementById('admin-clear-reals')?.addEventListener('click', async () => {
+    if (serverAdminAvailable) {
+      try {
+        const data = await adminApi('/api/admin/custom-realisations/clear', 'POST');
+        applyContentState(data);
+      } catch (error) {
+        showAdminFeedback('Action serveur impossible.', 'err');
+        return;
+      }
+    } else {
+      customRealisationsState = [];
+      persistStateToLocalStorage();
+    }
+    renderAdminLists();
+    showAdminFeedback('Réalisations personnalisées supprimées.', 'ok');
+  });
+
+  document.getElementById('admin-restore-default-products')?.addEventListener('click', async () => {
+    if (serverAdminAvailable) {
+      try {
+        const data = await adminApi('/api/admin/default-products/restore-all', 'POST');
+        applyContentState(data);
+      } catch (error) {
+        showAdminFeedback('Action serveur impossible.', 'err');
+        return;
+      }
+    } else {
+      hiddenDefaultProductsState = [];
+      persistStateToLocalStorage();
+    }
+    renderAdminLists();
+    showAdminFeedback('Tous les produits par défaut ont été restaurés.', 'ok');
+  });
+
+  document.getElementById('admin-restore-default-reals')?.addEventListener('click', async () => {
+    if (serverAdminAvailable) {
+      try {
+        const data = await adminApi('/api/admin/default-realisations/restore-all', 'POST');
+        applyContentState(data);
+      } catch (error) {
+        showAdminFeedback('Action serveur impossible.', 'err');
+        return;
+      }
+    } else {
+      hiddenDefaultRealisationsState = [];
+      persistStateToLocalStorage();
+    }
+    renderAdminLists();
+    showAdminFeedback('Toutes les réalisations par défaut ont été restaurées.', 'ok');
+  });
+}
+
+function rememberFocus() {
+  if (document.activeElement instanceof HTMLElement) {
+    lastFocusedElement = document.activeElement;
+  }
+}
+
+function restoreFocus() {
+  if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+    lastFocusedElement.focus();
+  }
+  lastFocusedElement = null;
+}
+
+function makeCardsKeyboardAccessible() {
+  document.querySelectorAll('.mini-cell, .real-cell, .product').forEach((card) => {
+    if (card.dataset.keyboardBound === '1') return;
+    card.dataset.keyboardBound = '1';
+
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('role', 'button');
+
+    if (!card.getAttribute('aria-label')) {
+      const label = card.querySelector('h3')?.textContent?.trim()
+        || card.querySelector('.cell-title')?.textContent?.trim()
+        || card.querySelector('img')?.alt
+        || 'Ouvrir le détail';
+      card.setAttribute('aria-label', label);
+    }
+
+    card.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      card.click();
+    });
+  });
+}
+
+async function initDynamicContent() {
+  await refreshContentState();
+  applyDefaultOverridesOnPublicPages();
+  applyFeaturedRealisationsOnHome();
+  applyFeaturedProductsOnHome();
+  renderCustomProducts();
+  renderCustomRealisations();
+  bindGalleryCells();
+  bindProductCards();
+  makeCardsKeyboardAccessible();
+}
+
+function openLightbox(src, alt) {
+  if (!lightbox || !lightboxImage) return;
+  rememberFocus();
+  lightboxImage.src = src;
+  lightboxImage.alt = alt || 'Tatouage';
+  lightbox.classList.add('open');
+  lightbox.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  lightboxClose?.focus();
+}
+
+function closeLightbox() {
+  if (!lightbox || !lightboxImage) return;
+  lightbox.classList.remove('open');
+  lightbox.setAttribute('aria-hidden', 'true');
+  lightboxImage.src = '';
+  document.body.style.overflow = '';
+  restoreFocus();
+}
+
+bindGalleryCells();
+
+if (lightboxClose) lightboxClose.addEventListener('click', closeLightbox);
+
+if (lightbox) {
+  lightbox.addEventListener('click', (event) => {
+    if (event.target === lightbox) closeLightbox();
+  });
+}
+
+document.addEventListener('keydown', (event) => {
+  const stripePreview = document.getElementById('stripe-preview');
+  if (event.key === 'Escape' && stripePreview && stripePreview.classList.contains('open')) {
+    stripePreview.querySelector('#stripe-preview-close')?.click();
+    return;
+  }
+  if (event.key === 'Escape' && reservationSlotModal && reservationSlotModal.classList.contains('open')) {
+    closeReservationSlotModal();
+    return;
+  }
+  if (event.key === 'Escape' && productModal && productModal.classList.contains('open')) {
+    closeProductModal();
+    return;
+  }
+  if (event.key === 'Escape' && lightbox && lightbox.classList.contains('open')) {
+    closeLightbox();
+  }
+});
+
+const CART_KEY = 'chiino_cart_v1';
+const floatingCartBtn = document.getElementById('floating-cart');
+const closeCartBtn = document.getElementById('close-cart');
+const cartDrawer = document.getElementById('cart-drawer');
+const cartItemsEl = document.getElementById('cart-items');
+const cartTotalEl = document.getElementById('cart-total');
+const cartCountEl = document.getElementById('cart-count');
+const checkoutBtn = document.getElementById('checkout-btn');
+const clearCartBtn = document.getElementById('clear-cart');
+const depositBtn = document.getElementById('deposit-btn');
+const productModal = document.getElementById('product-modal');
+const productModalClose = document.getElementById('product-modal-close');
+const productModalImage = document.getElementById('product-modal-image');
+const productModalBadge = document.getElementById('product-modal-badge');
+const productModalTitle = document.getElementById('product-modal-title');
+const productModalDesc = document.getElementById('product-modal-desc');
+const productModalPrice = document.getElementById('product-modal-price');
+const productModalOptionWrap = document.getElementById('product-modal-option-wrap');
+const productModalOptionLabel = document.getElementById('product-modal-option-label');
+const productModalOption = document.getElementById('product-modal-option');
+const productModalAdd = document.getElementById('product-modal-add');
+const depositFeedback = document.getElementById('deposit-feedback');
+const reservationPrenomInput = document.getElementById('reservation-prenom');
+const reservationNomInput = document.getElementById('reservation-nom');
+const reservationTelephoneInput = document.getElementById('reservation-telephone');
+const reservationStyleInput = document.getElementById('reservation-style');
+const reservationZoneInput = document.getElementById('reservation-zone');
+const reservationDayInput = document.getElementById('reservation-day');
+const reservationPeriodInput = document.getElementById('reservation-period');
+const reservationDisponibilitesInput = document.getElementById('reservation-disponibilites');
+const reservationImagesInput = document.getElementById('reservation-images');
+const reservationImagesHint = document.getElementById('reservation-images-hint');
+const reservationDescriptionInput = document.getElementById('reservation-description');
+const reservationOpenSlotPickerBtn = document.getElementById('reservation-open-slot-picker');
+const reservationSlotModal = document.getElementById('reservation-slot-modal');
+const reservationSlotCloseBtn = document.getElementById('reservation-slot-close');
+const reservationSlotCancelBtn = document.getElementById('reservation-slot-cancel');
+const reservationSlotConfirmBtn = document.getElementById('reservation-slot-confirm');
+const reservationSlotGrid = document.getElementById('reservation-slot-grid');
+const reservationSlotWeekLabel = document.getElementById('reservation-slot-week-label');
+const reservationSlotPrevBtn = document.getElementById('reservation-slot-prev');
+const reservationSlotNextBtn = document.getElementById('reservation-slot-next');
+const reservationSlotHint = document.getElementById('reservation-slot-hint');
+const reservationSlotSelectedLabel = document.getElementById('reservation-slot-selected');
+
+let cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
+let stripeClientPromise = null;
+let stripePreviewConfirmAction = null;
+let reservationPickerWeekStart = null;
+let reservationSelectedSlot = null;
+let reservationDraftSlot = null;
+let reservationOccupiedSlots = new Set();
+
+function getMinReservationDateKey() {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 2);
+  return toLocalDateKey(date);
+}
+
+function formatAmount(value) {
+  return Number(value || 0).toFixed(2).replace('.', ',') + '€';
+}
+
+function ensureStripePreviewDom() {
+  let modal = document.getElementById('stripe-preview');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'stripe-preview';
+  modal.className = 'stripe-preview';
+  modal.setAttribute('aria-hidden', 'true');
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-label', 'Aperçu paiement Stripe');
+  modal.setAttribute('tabindex', '-1');
+  modal.innerHTML =
+    '<div class="stripe-preview-card">' +
+      '<div class="stripe-preview-head">' +
+        '<strong>Aperçu paiement Stripe</strong>' +
+        '<button id="stripe-preview-close" class="stripe-preview-close" aria-label="Fermer">x</button>' +
+      '</div>' +
+      '<div class="stripe-preview-body">' +
+        '<p class="stripe-preview-note" id="stripe-preview-note"></p>' +
+        '<div class="stripe-preview-lines" id="stripe-preview-lines"></div>' +
+        '<div class="stripe-preview-total"><span>Total</span><span id="stripe-preview-total"></span></div>' +
+        '<div class="stripe-preview-fields">' +
+          '<input type="text" value="4242 4242 4242 4242" readonly>' +
+          '<input type="text" value="12 / 34   CVC 123" readonly>' +
+        '</div>' +
+        '<div class="stripe-preview-actions">' +
+          '<button id="stripe-preview-cancel" class="add-btn">Retour</button>' +
+          '<button id="stripe-preview-pay" class="btn-pay">Payer en simulation</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  const close = () => {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    stripePreviewConfirmAction = null;
+    document.body.style.overflow = '';
+    restoreFocus();
+  };
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) close();
+  });
+
+  modal.querySelector('#stripe-preview-close')?.addEventListener('click', close);
+  modal.querySelector('#stripe-preview-cancel')?.addEventListener('click', close);
+  modal.querySelector('#stripe-preview-pay')?.addEventListener('click', () => {
+    if (typeof stripePreviewConfirmAction === 'function') stripePreviewConfirmAction();
+    close();
+  });
+
+  return modal;
+}
+
+function openStripePreview(options) {
+  const modal = ensureStripePreviewDom();
+  rememberFocus();
+  const noteEl = modal.querySelector('#stripe-preview-note');
+  const linesEl = modal.querySelector('#stripe-preview-lines');
+  const totalEl = modal.querySelector('#stripe-preview-total');
+  const payBtn = modal.querySelector('#stripe-preview-pay');
+
+  if (noteEl) noteEl.textContent = options.note || 'Aperçu visuel du checkout (mode sans clés Stripe).';
+  if (linesEl) {
+    linesEl.innerHTML = (options.lines || [])
+      .map((line) => '<div class="stripe-preview-line"><span>' + line.label + '</span><span>' + line.value + '</span></div>')
+      .join('');
+  }
+  if (totalEl) totalEl.textContent = options.total || '0,00€';
+  if (payBtn) payBtn.textContent = options.confirmLabel || 'Payer en simulation';
+
+  stripePreviewConfirmAction = options.onConfirm || null;
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  modal.querySelector('#stripe-preview-close')?.focus();
+}
+
+async function getStripeClient() {
+  if (stripeClientPromise) return stripeClientPromise;
+
+  stripeClientPromise = (async () => {
+    if (typeof window.Stripe !== 'function') return null;
+
+    const response = await fetch('/api/public-config');
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (!data.publishableKey) return null;
+
+    return window.Stripe(data.publishableKey);
+  })();
+
+  return stripeClientPromise;
+}
+
+async function startStripeCheckout(endpoint, payload) {
+  const stripe = await getStripeClient();
+  if (!stripe) return { ok: false, reason: 'no-stripe-client' };
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {})
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.sessionId) {
+    return { ok: false, reason: data.error || 'session-error' };
+  }
+
+  const redirect = await stripe.redirectToCheckout({ sessionId: data.sessionId });
+  if (redirect && redirect.error) {
+    return { ok: false, reason: redirect.error.message || 'redirect-error' };
+  }
+
+  return { ok: true };
+}
+
+function saveCart() {
+  localStorage.setItem(CART_KEY, JSON.stringify(cart));
+}
+
+function formatPrice(value) {
+  return value.toFixed(2).replace('.', ',') + '€';
+}
+
+function toSlotKey(date, time) {
+  return `${String(date || '')}T${String(time || '')}`;
+}
+
+function getMondayFromDate(date) {
+  const monday = new Date(date);
+  monday.setHours(0, 0, 0, 0);
+  const day = monday.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  monday.setDate(monday.getDate() + diffToMonday);
+  return monday;
+}
+
+function renderReservationSlotPicker() {
+  if (!reservationSlotGrid || !reservationSlotWeekLabel) return;
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const weekStart = reservationPickerWeekStart ? new Date(reservationPickerWeekStart) : getMondayFromDate(now);
+  weekStart.setHours(0, 0, 0, 0);
+  reservationPickerWeekStart = weekStart;
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  reservationSlotWeekLabel.textContent = `${weekStart.toLocaleDateString('fr-FR')} - ${weekEnd.toLocaleDateString('fr-FR')}`;
+
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + index);
+    return {
+      date,
+      key: toLocalDateKey(date),
+      label: date.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })
+    };
+  });
+
+  const hours = Array.from({ length: 11 }, (_, index) => String(9 + index).padStart(2, '0') + ':00');
+  const header = '<div class="booking-slot-head booking-slot-hour"></div>' + days.map((d) => '<div class="booking-slot-head">' + escapeHtml(d.label) + '</div>').join('');
+  const rows = hours.map((hour) => {
+    const hourCell = '<div class="booking-slot-hour">' + hour + '</div>';
+    const dayCells = days.map((day) => {
+      const slotDate = day.key;
+      const slotKey = toSlotKey(slotDate, hour);
+      const isPast = new Date(slotDate + 'T' + hour + ':00').getTime() < Date.now();
+      const occupied = reservationOccupiedSlots.has(slotKey) || isPast;
+      const activeSelection = reservationDraftSlot || reservationSelectedSlot;
+      const selected = activeSelection && activeSelection.date === slotDate && activeSelection.time === hour;
+      const classes = [
+        'booking-slot-cell',
+        occupied ? 'is-occupied' : 'is-available',
+        selected ? 'is-selected' : ''
+      ].filter(Boolean).join(' ');
+      const stateLabel = occupied ? 'Occupé' : 'Disponible';
+      return '<button type="button" class="' + classes + '" data-slot-date="' + escapeHtml(slotDate) + '" data-slot-time="' + escapeHtml(hour) + '" ' + (occupied ? 'disabled' : '') + '><span>' + stateLabel + '</span></button>';
+    }).join('');
+    return hourCell + dayCells;
+  }).join('');
+
+  reservationSlotGrid.innerHTML = '<div class="booking-slot-table">' + header + rows + '</div>';
+
+  const selection = reservationDraftSlot || reservationSelectedSlot;
+  if (reservationSlotSelectedLabel) {
+    reservationSlotSelectedLabel.textContent = selection
+      ? ('Créneau sélectionné : ' + selection.date + ' à ' + selection.time)
+      : 'Aucun créneau sélectionné.';
+  }
+  if (reservationSlotConfirmBtn) {
+    reservationSlotConfirmBtn.disabled = !selection;
+  }
+}
+
+async function loadReservationAvailability() {
+  if (!reservationSlotGrid) return;
+
+  if (!reservationPickerWeekStart) {
+    reservationPickerWeekStart = getMondayFromDate(new Date());
+  }
+
+  try {
+    const data = await fetchJson('/api/public-schedule-availability');
+    const slots = Array.isArray(data.occupiedSlots) ? data.occupiedSlots : [];
+    reservationOccupiedSlots = new Set(
+      slots
+        .map((slot) => ({
+          date: String(slot.date || '').trim(),
+          time: String(slot.time || '').trim()
+        }))
+        .filter((slot) => /^\d{4}-\d{2}-\d{2}$/.test(slot.date) && /^\d{2}:\d{2}$/.test(slot.time))
+        .map((slot) => toSlotKey(slot.date, slot.time))
+    );
+
+    if (reservationSlotHint) {
+      reservationSlotHint.textContent = 'Clique sur un créneau disponible. Les créneaux occupés ne sont pas sélectionnables.';
+    }
+  } catch (error) {
+    reservationOccupiedSlots = new Set(
+      scheduleEntriesState
+        .map((entry) => ({ date: String(entry.date || '').trim(), time: String(entry.time || '').trim() }))
+        .filter((entry) => /^\d{4}-\d{2}-\d{2}$/.test(entry.date) && /^\d{2}:\d{2}$/.test(entry.time))
+        .map((entry) => toSlotKey(entry.date, entry.time))
+    );
+    if (reservationSlotHint) {
+      reservationSlotHint.textContent = 'Planning indisponible en direct. Affichage basé sur les données locales.';
+    }
+  }
+
+  renderReservationSlotPicker();
+}
+
+function closeReservationSlotModal() {
+  if (!reservationSlotModal) return;
+  reservationSlotModal.classList.remove('open');
+  reservationSlotModal.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+  reservationDraftSlot = null;
+}
+
+async function openReservationSlotModal() {
+  if (!reservationSlotModal) return;
+
+  await loadReservationAvailability();
+  reservationDraftSlot = reservationSelectedSlot ? { ...reservationSelectedSlot } : null;
+  renderReservationSlotPicker();
+
+  reservationSlotModal.classList.add('open');
+  reservationSlotModal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  reservationSlotCloseBtn?.focus();
+}
+
+function getCartTotal() {
+  return cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+}
+
+function renderCart() {
+  if (!cartItemsEl) return;
+
+  if (cart.length === 0) {
+    cartItemsEl.innerHTML = '<p style="font-size:12px;color:var(--muted)">Ton panier est vide.</p>';
+  } else {
+    cartItemsEl.innerHTML = cart.map((item, index) => (
+      (() => {
+        const optionText = item.optionValue
+          ? (item.optionLabel || 'Option') + ': ' + item.optionValue + ' • '
+          : '';
+        const unitPriceText = formatPrice(item.price) + ' / unité';
+        return '<div class="cart-item">' +
+          '<div><strong>' + (item.baseName || item.name) + '</strong><span>' + optionText + unitPriceText + '</span></div>' +
+          '<div class="cart-line-actions">' +
+            '<button data-action="minus" data-index="' + index + '">-</button>' +
+            '<span>' + item.qty + '</span>' +
+            '<button data-action="plus" data-index="' + index + '">+</button>' +
+          '</div>' +
+        '</div>';
+      })()
+    )).join('');
+  }
+
+  cartTotalEl.textContent = formatPrice(getCartTotal());
+  cartCountEl.textContent = cart.reduce((acc, item) => acc + item.qty, 0);
+  saveCart();
+}
+
+function openCart() {
+  if (!cartDrawer) return;
+  rememberFocus();
+  cartDrawer.classList.add('open');
+  cartDrawer.setAttribute('aria-hidden', 'false');
+  closeCartBtn?.focus();
+}
+
+function closeCart() {
+  if (!cartDrawer) return;
+  cartDrawer.classList.remove('open');
+  cartDrawer.setAttribute('aria-hidden', 'true');
+  restoreFocus();
+}
+
+function addToCart(product) {
+  const existing = cart.find((item) => item.sku === product.sku);
+  if (existing) {
+    existing.qty += 1;
+  } else {
+    cart.push({ ...product, qty: 1 });
+  }
+  renderCart();
+}
+
+function getDisplayedPrice(productCard) {
+  const displayedPrice = productCard.querySelector('.price')?.textContent || '';
+  const raw = (displayedPrice || productCard.dataset.price || '')
+    .replace('€', '')
+    .replace('EUR', '')
+    .replace(',', '.')
+    .trim();
+  return Number(raw);
+}
+
+let activeModalProduct = null;
+
+function openProductModal(productCard) {
+  if (!productModal) return;
+
+  rememberFocus();
+  activeModalProduct = productCard;
+  const img = productCard.querySelector('.product-img img');
+  const title = productCard.querySelector('h3')?.textContent?.trim() || 'Produit';
+  const shortDesc = productCard.querySelector('.product-info p')?.textContent?.trim() || '';
+  const longDesc = productCard.dataset.details || shortDesc;
+  const badge = productCard.querySelector('.product-badge')?.textContent?.trim() || '';
+  const priceText = productCard.querySelector('.price')?.textContent?.trim() || '';
+  const oldPrice = productCard.querySelector('.price-old')?.textContent?.trim() || '';
+  const optionLabel = productCard.dataset.optionLabel || '';
+  const optionValues = (productCard.dataset.options || '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+  if (productModalImage) {
+    productModalImage.src = img ? img.src : '';
+    productModalImage.alt = img ? (img.alt || title) : title;
+  }
+  if (productModalTitle) productModalTitle.textContent = title;
+  if (productModalDesc) productModalDesc.textContent = longDesc;
+
+  if (productModalBadge) {
+    productModalBadge.textContent = badge;
+    productModalBadge.style.display = badge ? 'block' : 'none';
+  }
+
+  if (productModalPrice) {
+    productModalPrice.innerHTML = oldPrice
+      ? '<span class="price-old">' + oldPrice + '</span> <span class="price">' + priceText + '</span>'
+      : '<span class="price">' + priceText + '</span>';
+  }
+
+  if (productModalOptionWrap && productModalOptionLabel && productModalOption) {
+    if (optionLabel && optionValues.length) {
+      productModalOptionWrap.style.display = 'flex';
+      productModalOptionLabel.textContent = optionLabel;
+      productModalOption.innerHTML = optionValues
+        .map((v) => '<option value="' + v + '">' + v + '</option>')
+        .join('');
+    } else {
+      productModalOptionWrap.style.display = 'none';
+      productModalOption.innerHTML = '';
+    }
+  }
+
+  productModal.classList.add('open');
+  productModal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  productModalClose?.focus();
+}
+
+function closeProductModal() {
+  if (!productModal) return;
+  productModal.classList.remove('open');
+  productModal.setAttribute('aria-hidden', 'true');
+  activeModalProduct = null;
+  document.body.style.overflow = '';
+  restoreFocus();
+}
+
+function autoApplyDiscountPricing() {
+  document.querySelectorAll('.product').forEach((productCard) => {
+    const badge = productCard.querySelector('.product-badge');
+    const priceEl = productCard.querySelector('.price');
+    if (!badge || !priceEl) return;
+
+    // Trigger only on badges like "-20%" / "- 20 %"
+    const badgeMatch = badge.textContent.match(/(\d+)\s*%/);
+    if (!badgeMatch) return;
+
+    const discountPct = Number(badgeMatch[1]);
+    if (!discountPct || discountPct <= 0 || discountPct >= 100) return;
+
+    const footer = productCard.querySelector('.product-footer');
+    if (!footer || footer.querySelector('.price-wrap')) return;
+
+    const newPriceRaw = (productCard.dataset.price || priceEl.textContent)
+      .replace('€', '')
+      .replace('EUR', '')
+      .replace(',', '.')
+      .trim();
+    const newPrice = Number(newPriceRaw);
+    if (!Number.isFinite(newPrice) || newPrice <= 0) return;
+
+    const oldPrice = newPrice / (1 - discountPct / 100);
+    const oldPriceFormatted = oldPrice.toFixed(2).replace('.', ',') + '€';
+
+    const wrap = document.createElement('span');
+    wrap.className = 'price-wrap';
+
+    const oldEl = document.createElement('span');
+    oldEl.className = 'price-old';
+    oldEl.textContent = oldPriceFormatted;
+
+    wrap.appendChild(oldEl);
+    wrap.appendChild(priceEl);
+    footer.insertBefore(wrap, footer.firstChild);
+  });
+}
+
+autoApplyDiscountPricing();
+
+function bindProductCards() {
+  document.querySelectorAll('.product').forEach((productCard) => {
+    const addBtn = productCard.querySelector('.add-cart');
+    if (!addBtn || productCard.dataset.productBound === '1') return;
+
+    productCard.dataset.productBound = '1';
+
+    productCard.addEventListener('click', (event) => {
+      if (event.target.closest('.add-cart')) return;
+      openProductModal(productCard);
+    });
+
+    addBtn.addEventListener('click', () => {
+      openProductModal(productCard);
+    });
+  });
+}
+
+if (productModalClose) {
+  productModalClose.addEventListener('click', closeProductModal);
+}
+
+if (productModal) {
+  productModal.addEventListener('click', (event) => {
+    if (event.target === productModal) closeProductModal();
+  });
+}
+
+if (productModalAdd) {
+  productModalAdd.addEventListener('click', () => {
+    if (!activeModalProduct) return;
+    const title = activeModalProduct.querySelector('h3')?.textContent?.trim() || 'Produit';
+    const optionSuffix = productModalOption && productModalOption.value
+      ? ' - ' + productModalOption.value
+      : '';
+    const optionValue = productModalOption && productModalOption.value ? productModalOption.value : '';
+    const optionLabel = activeModalProduct.dataset.optionLabel || 'Option';
+    const price = getDisplayedPrice(activeModalProduct);
+
+    addToCart({
+      sku: (activeModalProduct.dataset.sku || title) + optionSuffix,
+      stripeSku: activeModalProduct.dataset.sku || title,
+      supplier: activeModalProduct.dataset.supplier || 'Fournisseur',
+      baseName: title,
+      name: title + optionSuffix,
+      optionLabel,
+      optionValue,
+      price
+    });
+
+    closeProductModal();
+  });
+}
+
+if (cartItemsEl) {
+  cartItemsEl.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!target.dataset.action) return;
+    const index = Number(target.dataset.index);
+    const item = cart[index];
+    if (!item) return;
+
+    if (target.dataset.action === 'plus') item.qty += 1;
+    if (target.dataset.action === 'minus') item.qty -= 1;
+    if (item.qty <= 0) cart.splice(index, 1);
+    renderCart();
+  });
+}
+
+if (floatingCartBtn) floatingCartBtn.addEventListener('click', openCart);
+if (closeCartBtn) closeCartBtn.addEventListener('click', closeCart);
+
+if (clearCartBtn) {
+  clearCartBtn.addEventListener('click', () => {
+    cart = [];
+    renderCart();
+  });
+}
+
+if (checkoutBtn) {
+  checkoutBtn.addEventListener('click', async () => {
+    if (cart.length === 0) {
+      alert('Ton panier est vide.');
+      return;
+    }
+
+    try {
+      const stripeItems = cart.map((item) => ({
+        sku: item.stripeSku || item.sku,
+        qty: item.qty
+      }));
+
+      const result = await startStripeCheckout('/api/create-checkout-session', { items: stripeItems });
+      if (result.ok) return;
+    } catch (error) {
+      // Fallback simulation below
+    }
+
+    openStripePreview({
+      note: 'Stripe n\'est pas configuré sur ce poste. Voici un aperçu de checkout.',
+      lines: cart.map((item) => ({
+        label: item.name + ' x' + item.qty,
+        value: formatAmount(item.price * item.qty)
+      })),
+      total: formatAmount(getCartTotal()),
+      confirmLabel: 'Valider la commande (simulation)',
+      onConfirm: () => {
+        cart = [];
+        renderCart();
+        closeCart();
+        alert('Commande simulée validée. Aucun paiement réel n\'a été effectué.');
+      }
+    });
+  });
+}
+
+if (depositBtn) {
+  depositBtn.addEventListener('click', async () => {
+    const bookingForm = document.querySelector('#page-reservation .booking-form');
+    if (!bookingForm) return;
+
+    const showDepositFeedback = (message, type) => {
+      if (!depositFeedback) {
+        alert(message);
+        return;
+      }
+      depositFeedback.textContent = message;
+      depositFeedback.classList.add('show');
+      depositFeedback.classList.remove('ok', 'err');
+      depositFeedback.classList.add(type === 'ok' ? 'ok' : 'err');
+    };
+
+    const prenom = reservationPrenomInput?.value?.trim() || '';
+    const nom = reservationNomInput?.value?.trim() || '';
+    const telephone = reservationTelephoneInput?.value?.trim() || '';
+    const style = reservationStyleInput?.value?.trim() || '';
+    const zone = reservationZoneInput?.value?.trim() || '';
+    const selectedDate = reservationDayInput?.value?.trim() || '';
+    const selectedPeriod = reservationPeriodInput?.value?.trim() || '';
+    const periodLabelMap = { 'matin': 'Matin', 'apres-midi': 'Après-midi', 'soiree': 'Soirée' };
+    const selectedPeriodLabel = periodLabelMap[selectedPeriod] || '';
+    const disponibilites = selectedDate && selectedPeriodLabel
+      ? (selectedDate + ' - ' + selectedPeriodLabel)
+      : '';
+    const description = reservationDescriptionInput?.value?.trim() || '';
+    const imageFiles = Array.from(reservationImagesInput?.files || []);
+    let images = [];
+
+    if (!prenom || !nom || !telephone || !description || !selectedDate || !selectedPeriod) {
+      showDepositFeedback('Merci de compléter le formulaire et de choisir un jour et un moment de la journée.', 'err');
+      return;
+    }
+
+    const minDate = getMinReservationDateKey();
+    if (selectedDate < minDate) {
+      showDepositFeedback('Le jour choisi doit être au minimum dans 48h.', 'err');
+      return;
+    }
+
+    if (imageFiles.length > 4) {
+      showDepositFeedback('Tu peux joindre jusqu\'a 4 images maximum.', 'err');
+      return;
+    }
+
+    try {
+      for (const file of imageFiles) {
+        if (!String(file.type || '').startsWith('image/')) {
+          showDepositFeedback('Seuls les fichiers image sont autorisés.', 'err');
+          return;
+        }
+        if (Number(file.size || 0) > 5 * 1024 * 1024) {
+          showDepositFeedback('Chaque image doit faire moins de 5 Mo.', 'err');
+          return;
+        }
+        const dataUrl = await readFileAsDataUrl(file);
+        images.push({
+          name: String(file.name || 'image').slice(0, 120),
+          type: String(file.type || 'image/*').slice(0, 80),
+          dataUrl
+        });
+      }
+    } catch (error) {
+      showDepositFeedback('Impossible de lire une des images sélectionnées.', 'err');
+      return;
+    }
+
+    if (reservationImagesHint) {
+      reservationImagesHint.textContent = imageFiles.length
+        ? imageFiles.length + ' image(s) prête(s) à être envoyée(s).'
+        : 'Tu peux joindre jusqu\'à 4 images (5 Mo max par image).';
+    }
+
+    try {
+      const result = await startStripeCheckout('/api/create-deposit-session', {
+        customer: { prenom, nom, telephone },
+        projet: { style, zone, disponibilites, description, selectedDate, selectedPeriod, images }
+      });
+
+      if (!result.ok && /créneau|creneau|occupé|occupe|indisponible/i.test(String(result.reason || ''))) {
+        showDepositFeedback(String(result.reason || 'Le créneau n\'est plus disponible.'), 'err');
+        await loadReservationAvailability();
+        return;
+      }
+
+      if (result.ok) return;
+    } catch (error) {
+      // Fallback simulation below
+    }
+
+    openStripePreview({
+      note: 'Stripe n\'est pas configuré sur ce poste. Voici un aperçu de checkout pour l\'acompte.',
+      lines: [
+        { label: 'Acompte réservation tatouage', value: '50,00€' },
+        { label: 'Client', value: prenom + ' ' + nom }
+      ],
+      total: '50,00€',
+      confirmLabel: 'Confirmer l\'acompte (simulation)',
+      onConfirm: () => {
+        const STORAGE_KEY = 'chiino_deposit_simulations_v1';
+        const simulations = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        const reference = 'DEP-' + Date.now().toString().slice(-8);
+
+        simulations.push({
+          reference,
+          createdAt: new Date().toISOString(),
+          amount: 50,
+          status: 'acompte-simule',
+          client: { prenom, nom, telephone },
+          projet: {
+            style,
+            zone,
+            description,
+            disponibilites,
+            selectedDate,
+            selectedPeriod,
+            images: imageFiles.map((file) => String(file.name || 'image'))
+          }
+        });
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(simulations));
+        showDepositFeedback('Acompte simulé confirmé. Référence : ' + reference + '. Aucun paiement réel n\'a été effectué.', 'ok');
+      }
+    });
+  });
+}
+
+if (reservationSlotGrid) {
+  reservationSlotGrid.addEventListener('click', (event) => {
+    const button = event.target instanceof HTMLElement
+      ? event.target.closest('[data-slot-date][data-slot-time]')
+      : null;
+    if (!button || button.hasAttribute('disabled')) return;
+
+    const date = String(button.getAttribute('data-slot-date') || '').trim();
+    const time = String(button.getAttribute('data-slot-time') || '').trim();
+    if (!date || !time) return;
+
+    reservationDraftSlot = { date, time };
+    renderReservationSlotPicker();
+  });
+}
+
+reservationSlotPrevBtn?.addEventListener('click', () => {
+  const start = reservationPickerWeekStart ? new Date(reservationPickerWeekStart) : getMondayFromDate(new Date());
+  start.setDate(start.getDate() - 7);
+  reservationPickerWeekStart = start;
+  renderReservationSlotPicker();
+});
+
+reservationSlotNextBtn?.addEventListener('click', () => {
+  const start = reservationPickerWeekStart ? new Date(reservationPickerWeekStart) : getMondayFromDate(new Date());
+  start.setDate(start.getDate() + 7);
+  reservationPickerWeekStart = start;
+  renderReservationSlotPicker();
+});
+
+reservationOpenSlotPickerBtn?.addEventListener('click', () => {
+  openReservationSlotModal().catch(() => {
+    if (reservationSlotHint) {
+      reservationSlotHint.textContent = 'Impossible de charger le planning pour le moment.';
+    }
+  });
+});
+
+reservationSlotCloseBtn?.addEventListener('click', closeReservationSlotModal);
+reservationSlotCancelBtn?.addEventListener('click', closeReservationSlotModal);
+
+reservationSlotConfirmBtn?.addEventListener('click', () => {
+  const selection = reservationDraftSlot || reservationSelectedSlot;
+  if (!selection) return;
+
+  reservationSelectedSlot = { ...selection };
+  if (reservationDisponibilitesInput) {
+    reservationDisponibilitesInput.value = `${selection.date} ${selection.time}`;
+  }
+  closeReservationSlotModal();
+});
+
+reservationSlotModal?.addEventListener('click', (event) => {
+  if (event.target === reservationSlotModal) {
+    closeReservationSlotModal();
+  }
+});
+
+if (reservationDayInput) {
+  reservationDayInput.min = getMinReservationDateKey();
+}
+
+function initContactForm() {
+  const prenomInput = document.getElementById('contact-prenom');
+  const telephoneInput = document.getElementById('contact-telephone');
+  const sujetInput = document.getElementById('contact-sujet');
+  const messageInput = document.getElementById('contact-message');
+  const submitBtn = document.getElementById('contact-submit');
+  const feedback = document.getElementById('contact-feedback');
+
+  if (!prenomInput || !telephoneInput || !sujetInput || !messageInput || !submitBtn) {
+    return;
+  }
+
+  const setFeedback = (message, isError) => {
+    if (!feedback) return;
+    feedback.textContent = message;
+    feedback.style.color = isError ? '#b43030' : 'var(--muted)';
+  };
+
+  submitBtn.addEventListener('click', async () => {
+    const prenom = String(prenomInput.value || '').trim();
+    const telephone = String(telephoneInput.value || '').trim();
+    const sujet = String(sujetInput.value || '').trim();
+    const message = String(messageInput.value || '').trim();
+
+    if (!prenom || !telephone || !sujet || !message) {
+      setFeedback('Merci de compléter tous les champs.', true);
+      return;
+    }
+
+    if (!telephoneInput.checkValidity()) {
+      setFeedback('Numéro invalide. Exemple : 06 12 34 56 78.', true);
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Envoi...';
+
+    try {
+      await fetchJson('/api/contact-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prenom, telephone, sujet, message })
+      });
+
+      setFeedback('Message envoyé. Merci, on te répond rapidement.', false);
+      messageInput.value = '';
+    } catch (error) {
+      setFeedback('Impossible d\'envoyer le message pour le moment.', true);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Envoyer ->';
+    }
+  });
+}
+
+renderCart();
+initDynamicContent().catch(() => {
+  loadStateFromLocalStorage();
+  applyDefaultOverridesOnPublicPages();
+  applyFeaturedRealisationsOnHome();
+  renderCustomProducts();
+  renderCustomRealisations();
+  bindGalleryCells();
+  bindProductCards();
+  makeCardsKeyboardAccessible();
+});
+initAdminBackoffice();
+loadReservationAvailability();
+initContactForm();

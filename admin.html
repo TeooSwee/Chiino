@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="Assets/favicon-flat.png?v=3">
+  <title>Chiino - Back-office</title>
+</head>
+<body>
+  <nav>
+    <a href="index.html"><div class="logo">CHIINO<span>.</span></div></a>
+    <div class="nav-links">
+      <button class="nav-btn" onclick="window.location.href='index.html'">Accueil</button>
+      <button class="nav-btn" onclick="window.location.href='realisations.html'">Réalisations</button>
+      <button class="nav-btn" onclick="window.location.href='boutique.html'">Boutique</button>
+      <button class="nav-btn" onclick="window.location.href='contact.html'">Contact</button>
+    </div>
+    <button class="nav-cta" onclick="window.location.href='reservation.html'">Prendre RDV</button>
+  </nav>
+
+  <div id="page-admin" class="page active">
+    <div class="page-header">
+      <div>
+        <h1>Back-office<span style="color:var(--accent)">.</span></h1>
+        <p>Ajoutez facilement vos produits et vos réalisations.</p>
+      </div>
+    </div>
+
+    <section class="admin-wrap" id="admin-login-wrap">
+      <article class="admin-card">
+        <h2>Connexion</h2>
+        <p>Accès protégé par mot de passe local.</p>
+        <div class="fg" style="margin-top:14px">
+          <label for="admin-password">Mot de passe</label>
+          <input id="admin-password" type="password" placeholder="Mot de passe back-office">
+        </div>
+        <button id="admin-login-btn" class="btn-prim" style="margin-top:12px">Se connecter</button>
+        <p id="admin-login-feedback" class="admin-feedback" aria-live="polite"></p>
+      </article>
+    </section>
+
+    <section class="admin-wrap" id="admin-panel" style="display:none">
+      <article class="admin-card" id="admin-home">
+        <h2>Accueil admin</h2>
+        <p>Choisissez le module à gérer.</p>
+        <div class="admin-home-grid" style="margin-top:12px">
+          <button class="btn-prim admin-home-btn" data-admin-target="reals">Réalisations</button>
+          <button class="btn-prim admin-home-btn" data-admin-target="products">Produits</button>
+          <button class="btn-prim admin-home-btn" data-admin-target="schedule">Emploi du temps</button>
+        </div>
+      </article>
+
+      <div id="admin-module-products" class="admin-module" style="display:none">
+        <article class="admin-card">
+          <div class="admin-card-head">
+            <h2 id="admin-product-form-title">Ajouter un produit</h2>
+            <button class="add-btn" data-admin-target="home">Retour accueil</button>
+          </div>
+          <div class="form-grid">
+            <div class="fg full"><label for="admin-product-name">Nom du produit</label><input id="admin-product-name" type="text" placeholder="Ex: Crème réparatrice"></div>
+            <div class="fg"><label for="admin-product-short">Résumé court</label><input id="admin-product-short" type="text" placeholder="Ex: Hydratation de votre peau"></div>
+            <div class="fg"><label for="admin-product-price">Prix actuel (€)</label><input id="admin-product-price" type="number" min="0" step="0.01" placeholder="Ex: 28"></div>
+            <div class="fg"><label for="admin-product-old-price">Ancien prix (€) optionnel</label><input id="admin-product-old-price" type="number" min="0" step="0.01" placeholder="Ex: 35"></div>
+            <div class="fg"><label for="admin-product-category">Catégorie</label><select id="admin-product-category"><option value="modeles">Modèles</option><option value="soins">Soins</option><option value="vetements">Vêtements</option></select></div>
+            <div class="fg"><label for="admin-product-badge">Badge optionnel</label><input id="admin-product-badge" type="text" placeholder="Ex: Nouveau / -20 %"></div>
+            <div class="fg"><label for="admin-product-option-label">Label option</label><input id="admin-product-option-label" type="text" placeholder="Ex: Format ou Taille"></div>
+            <div class="fg"><label for="admin-product-options">Options (virgule)</label><input id="admin-product-options" type="text" placeholder="Ex: A4,A3"></div>
+            <div class="fg full"><label for="admin-product-details">Description détaillée</label><textarea id="admin-product-details" placeholder="Texte affiché dans la pop-up produit"></textarea></div>
+            <div class="fg"><label for="admin-product-image-url">Image URL (optionnel)</label><input id="admin-product-image-url" type="url" placeholder="https://..."></div>
+            <div class="fg"><label for="admin-product-image-file">ou Image depuis votre appareil</label><input id="admin-product-image-file" type="file" accept="image/*"></div>
+          </div>
+          <div class="admin-inline-actions" style="display:flex;gap:10px;margin-top:12px">
+            <button id="admin-add-product" class="btn-prim" style="margin-top:0;flex:1">Ajouter le produit</button>
+            <button id="admin-cancel-product-edit" class="add-btn" style="display:none">Annuler</button>
+          </div>
+        </article>
+
+        <article class="admin-card">
+          <div class="admin-card-head">
+            <h2>Produits du site</h2>
+            <button id="admin-restore-default-products" class="add-btn">Tout restaurer</button>
+          </div>
+          <div id="admin-default-products-list" class="admin-list"></div>
+        </article>
+
+        <article class="admin-card">
+          <div class="admin-card-head">
+            <h2>Best-sellers (Accueil)</h2>
+            <button id="admin-save-featured-products" class="add-btn">Enregistrer la sélection</button>
+          </div>
+          <div id="admin-featured-products-list" class="admin-list"></div>
+        </article>
+      </div>
+
+      <div id="admin-module-reals" class="admin-module" style="display:none">
+        <article class="admin-card">
+          <div class="admin-card-head">
+            <h2 id="admin-real-form-title">Ajouter une réalisation</h2>
+            <button class="add-btn" data-admin-target="home">Retour accueil</button>
+          </div>
+          <div class="form-grid">
+            <div class="fg"><label for="admin-real-title">Titre</label><input id="admin-real-title" type="text" placeholder="Ex: Espoir"></div>
+            <div class="fg"><label for="admin-real-style">Style</label><select id="admin-real-style"><option>Géométrique</option><option>Japonais</option><option>Old School</option><option>Lettering</option><option>Florale</option><option>Flash custom</option></select></div>
+            <div class="fg"><label for="admin-real-image-url">Image URL (optionnel)</label><input id="admin-real-image-url" type="url" placeholder="https://..."></div>
+            <div class="fg"><label for="admin-real-image-file">ou Image depuis votre appareil</label><input id="admin-real-image-file" type="file" accept="image/*"></div>
+          </div>
+          <div class="admin-inline-actions" style="display:flex;gap:10px;margin-top:12px">
+            <button id="admin-add-real" class="btn-prim" style="margin-top:0;flex:1">Ajouter la réalisation</button>
+            <button id="admin-cancel-real-edit" class="add-btn" style="display:none">Annuler</button>
+          </div>
+        </article>
+
+        <article class="admin-card">
+          <div class="admin-card-head">
+            <h2>Réalisations du site</h2>
+            <button id="admin-restore-default-reals" class="add-btn">Tout restaurer</button>
+          </div>
+          <div id="admin-default-reals-list" class="admin-list"></div>
+        </article>
+
+        <article class="admin-card">
+          <div class="admin-card-head">
+            <h2>Dernières réalisations (Accueil)</h2>
+            <button id="admin-save-featured" class="add-btn">Enregistrer la sélection</button>
+          </div>
+          <div id="admin-featured-list" class="admin-list"></div>
+        </article>
+      </div>
+
+      <div id="admin-module-schedule" class="admin-module" style="display:none">
+        <article class="admin-card">
+          <div class="admin-card-head">
+            <h2>Emploi du temps</h2>
+            <div class="admin-head-actions" style="display:flex;gap:8px">
+              <button id="admin-open-schedule-modal" class="btn-prim" style="margin-top:0">Ajouter un créneau</button>
+              <button class="add-btn" data-admin-target="home">Retour accueil</button>
+            </div>
+          </div>
+          <div id="admin-schedule-planner" class="admin-schedule-planner"></div>
+        </article>
+
+        <div id="admin-schedule-modal" class="admin-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Ajouter un créneau planning">
+          <div class="admin-modal-card">
+            <div class="admin-card-head" style="margin-bottom:12px">
+              <h2 id="admin-schedule-modal-title" style="margin-bottom:0">Ajouter un créneau planning</h2>
+              <button id="admin-close-schedule-modal" class="add-btn">Fermer</button>
+            </div>
+            <p id="admin-schedule-slot-info" style="font-size:11px;color:var(--muted);margin-bottom:10px"></p>
+            <p id="admin-schedule-overlap-warning" class="admin-overlap-warning" aria-live="polite"></p>
+            <div id="admin-schedule-existing" class="admin-schedule-existing"></div>
+            <div id="admin-schedule-attachments" class="admin-schedule-attachments"></div>
+            <div class="form-grid">
+              <div class="fg"><label for="admin-schedule-client">Client</label><input id="admin-schedule-client" type="text" placeholder="Nom du client"></div>
+              <div class="fg"><label for="admin-schedule-date">Date</label><input id="admin-schedule-date" type="date"></div>
+              <div class="fg"><label for="admin-schedule-time">Heure</label><input id="admin-schedule-time" type="time"></div>
+              <div class="fg"><label for="admin-schedule-duration">Durée (min)</label><input id="admin-schedule-duration" type="number" min="30" step="30" placeholder="120"></div>
+              <div class="fg"><label for="admin-schedule-status">Statut</label><select id="admin-schedule-status"><option value="en-attente">En attente</option><option value="confirme">Confirmé</option><option value="termine">Terminé</option></select></div>
+              <div class="fg full"><label for="admin-schedule-note">Note</label><textarea id="admin-schedule-note" placeholder="Détails du projet / rappel"></textarea></div>
+            </div>
+            <div class="admin-modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">
+              <button id="admin-delete-schedule" class="add-btn" style="display:none">Supprimer</button>
+              <button id="admin-cancel-schedule-modal" class="add-btn">Annuler</button>
+              <button id="admin-add-schedule" class="btn-prim" style="margin-top:0">Ajouter au planning</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p id="admin-feedback" class="admin-feedback" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <footer>
+    <a href="index.html" class="f-logo-link"><div class="f-logo">CHIINO<span>.</span></div></a>
+    <div class="f-links">
+      <a href="https://www.instagram.com/dctattoo_arts/" target="_blank" rel="noopener noreferrer">Instagram</a>
+      <a href="https://www.tiktok.com/@dctattoo_arts" target="_blank" rel="noopener noreferrer">TikTok</a>
+      <a href="mentions-legales.html">Mentions légales</a>
+      <a href="cgv.html">CGV</a>
+      <a href="admin.html">Back-office</a>
+    </div>
+    <span class="f-copy">© 2026 Chiino - Strasbourg<br>Site web réalisé par Téo Lefébure</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

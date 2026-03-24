@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="Assets/favicon-flat.png?v=3">
+  <script src="https://js.stripe.com/v3"></script>
+  <title>Chiino - Réalisations</title>
+</head>
+<body>
+  <nav>
+   <a href="index.html"><div class="logo">CHIINO<span>.</span></div></a>
+    <div class="nav-links">
+      <button class="nav-btn" onclick="window.location.href='index.html'">Accueil</button>
+      <button class="nav-btn active" onclick="window.location.href='realisations.html'">Réalisations</button>
+      <button class="nav-btn" onclick="window.location.href='boutique.html'">Boutique</button>
+      <button class="nav-btn" onclick="window.location.href='contact.html'">Contact</button>
+    </div>
+    <button class="nav-cta" onclick="window.location.href='reservation.html'">Prendre RDV</button>
+  </nav>
+
+  <div id="page-realisations" class="page active">
+    <div class="page-header">
+      <div>
+        <h1>Réalisations<span style="color:var(--accent)">.</span></h1>
+        <p>Toutes les réalisations - filtrer par style</p>
+      </div>
+    </div>
+    <div class="filters">
+      <button class="filt on" onclick="setFilt(this)">Tous</button>
+      <button class="filt" onclick="setFilt(this)">Géométrique</button>
+      <button class="filt" onclick="setFilt(this)">Japonais</button>
+      <button class="filt" onclick="setFilt(this)">Old School</button>
+      <button class="filt" onclick="setFilt(this)">Lettering</button>
+      <button class="filt" onclick="setFilt(this)">Florale</button>
+      <button class="filt" onclick="setFilt(this)">Flash custom</button>
+    </div>
+    <div class="real-grid">
+      <div class="real-cell real-cell-wide"><img class="tilt-left" src="Assets/bras-lettres2.png" alt="Tatouage lettres" loading="lazy" decoding="async"><div class="cell-overlay"><p class="cell-title">Play to Good</p><p class="cell-style">Lettering</p></div></div>
+      <div class="real-cell"><img class="tilt-right" src="Assets/cou-japon.png" alt="Tatouage japonais" loading="lazy" decoding="async"><div class="cell-overlay"><p class="cell-title">Harmonie</p><p class="cell-style">Japonais</p></div></div>
+      <div class="real-cell real-cell-tall"><img class="tilt-left" src="Assets/bras-temps.png" alt="Tatouage temps" loading="lazy" decoding="async"><div class="cell-overlay"><p class="cell-title">Course du temps</p><p class="cell-style">Flash custom</p></div></div>
+      <div class="real-cell"><img class="tilt-right" src="Assets/bras-ciel.png" alt="Tatouage ciel" loading="lazy" decoding="async"><div class="cell-overlay"><p class="cell-title">Espoir</p><p class="cell-style">Flash custom</p></div></div>
+      <div class="real-cell"><img class="tilt-right" src="Assets/main-date.png" alt="Tatouage main" loading="lazy" decoding="async"><div class="cell-overlay"><p class="cell-title">Date ancrée</p><p class="cell-style">Old School</p></div></div>
+      <div class="real-cell"><img class="tilt-right" src="Assets/dos-fleur.png" alt="Tatouage dos" loading="lazy" decoding="async"><div class="cell-overlay"><p class="cell-title">Fleuraison</p><p class="cell-style">Florale</p></div></div>
+    </div>
+  </div>
+
+  <footer>
+    <a href="index.html" class="f-logo-link"><div class="f-logo">CHIINO<span>.</span></div></a>
+    <div class="f-links">
+      <a href="https://www.instagram.com/dctattoo_arts/" target="_blank" rel="noopener noreferrer">Instagram</a>
+      <a href="https://www.tiktok.com/@dctattoo_arts" target="_blank" rel="noopener noreferrer">TikTok</a>
+      <a href="mentions-legales.html">Mentions légales</a>
+      <a href="cgv.html">CGV</a>
+      <a href="admin.html">Back-office</a>
+    </div>
+    <span class="f-copy">© 2026 Chiino - Strasbourg<br>Site web réalisé par Téo Lefébure</span>
+  </footer>
+  <div id="lightbox" class="lightbox" aria-hidden="true" role="dialog" aria-modal="true" tabindex="-1">
+    <button id="lightbox-close" class="lightbox-close" aria-label="Fermer">x</button>
+    <img id="lightbox-image" src="" alt="Agrandissement tatouage">
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="Assets/favicon-flat.png?v=3">
+  <script src="https://js.stripe.com/v3"></script>
+  <title>Chiino - Contact</title>
+</head>
+<body>
+  <nav>
+    <a href="index.html"><div class="logo">CHIINO<span>.</span></div></a>
+    <div class="nav-links">
+      <button class="nav-btn" onclick="window.location.href='index.html'">Accueil</button>
+      <button class="nav-btn" onclick="window.location.href='realisations.html'">Réalisations</button>
+      <button class="nav-btn" onclick="window.location.href='boutique.html'">Boutique</button>
+      <button class="nav-btn active" onclick="window.location.href='contact.html'">Contact</button>
+    </div>
+    <button class="nav-cta" onclick="window.location.href='reservation.html'">Prendre RDV</button>
+  </nav>
+
+  <div id="page-contact" class="page active">
+    <div class="contact-wrap">
+      <div class="contact-left">
+        <div>
+          <h1>Parlons de<br><em>ton projet.</em></h1>
+          <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.9">Pour toute question avant de réserver, pour un projet complexe ou juste pour dire bonjour.</p>
+        </div>
+        <div class="info-block"><strong>Studio</strong><p><a href="https://www.google.com/maps/search/?api=1&query=1+rue+des+%C3%A9chasses%2C+67000+Strasbourg" target="_blank" rel="noopener noreferrer" aria-label="Ouvrir l'adresse du studio dans Google Maps" style="color:inherit;text-decoration:none">1 rue des échasses<br>67 000 Strasbourg, France</a></p></div>
+        <div class="info-block"><strong>Horaires</strong><p>Lundi - Samedi<br>10h00 - 18h00</p></div>
+        <div class="info-block"><strong>Email</strong><p>contact@chiino-tattoo.fr</p></div>
+        <div class="info-block"><strong>Réseaux</strong>
+          <div class="socials" style="margin-top:10px">
+            <a class="social-btn" href="https://www.instagram.com/dctattoo_arts/" target="_blank" rel="noopener noreferrer">Instagram</a>
+            <a class="social-btn" href="https://www.tiktok.com/@dctattoo_arts" target="_blank" rel="noopener noreferrer">TikTok</a>
+          </div>
+        </div>
+      </div>
+      <div class="contact-right">
+        <h2>Envoyer un message<span style="color:var(--accent)">.</span></h2>
+        <div class="form-grid">
+          <div class="fg"><label for="contact-prenom">Prénom</label><input id="contact-prenom" type="text" placeholder="Alex" required></div>
+          <div class="fg"><label for="contact-telephone">Téléphone</label><input id="contact-telephone" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78" pattern="^((\+33|0)[1-9](?:[ .-]?\d{2}){4})$" title="Exemple : 06 12 34 56 78 ou +33 6 12 34 56 78" required></div>
+          <div class="fg full"><label for="contact-sujet">Sujet</label><select id="contact-sujet" required><option>Question générale</option><option>Demande de devis</option><option>Projet sleeve / grand format</option><option>Collaboration</option><option>Autre</option></select></div>
+          <div class="fg full"><label for="contact-message">Message</label><textarea id="contact-message" style="height:120px" placeholder="Décris ce que tu as en tête..." required></textarea></div>
+        </div>
+        <button id="contact-submit" class="btn-prim" type="button" style="width:100%;padding:14px;margin-top:4px;font-size:13px">Envoyer -&gt;</button>
+        <p id="contact-feedback" style="font-size:10px;color:var(--muted);margin-top:10px;text-align:center">Réponse sous 48h - Pas de spam, promis.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <a href="index.html" class="f-logo-link"><div class="f-logo">CHIINO<span>.</span></div></a>
+    <div class="f-links">
+      <a href="https://www.instagram.com/dctattoo_arts/" target="_blank" rel="noopener noreferrer">Instagram</a>
+      <a href="https://www.tiktok.com/@dctattoo_arts" target="_blank" rel="noopener noreferrer">TikTok</a>
+      <a href="mentions-legales.html">Mentions légales</a>
+      <a href="cgv.html">CGV</a>
+      <a href="admin.html">Back-office</a>
+    </div>
+    <span class="f-copy">© 2026 Chiino - Strasbourg<br>Site web réalisé par Téo Lefébure</span>
+  </footer>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="Assets/favicon-flat.png?v=3">
+  <script src="https://js.stripe.com/v3"></script>
+  <title>Chiino - Réservation</title>
+</head>
+<body>
+  <nav>
+    <a href="index.html"><div class="logo">CHIINO<span>.</span></div></a>
+    <div class="nav-links">
+      <button class="nav-btn" onclick="window.location.href='index.html'">Accueil</button>
+      <button class="nav-btn" onclick="window.location.href='realisations.html'">Réalisations</button>
+      <button class="nav-btn" onclick="window.location.href='boutique.html'">Boutique</button>
+      <button class="nav-btn" onclick="window.location.href='contact.html'">Contact</button>
+    </div>
+    <button class="nav-cta" onclick="window.location.href='reservation.html'">Prendre RDV</button>
+  </nav>
+
+  <div id="page-reservation" class="page active">
+    <div class="booking-wrap">
+      <div class="booking-info">
+        <h1>Réserver<br>& <em>Payer l'acompte</em></h1>
+        <p class="booking-desc">Pour confirmer ton rendez-vous, un acompte de 50€ est demandé. Il est déduit du tarif final et garantit ta place dans le planning.</p>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Remplis le formulaire</strong><span>Décris ton projet, la zone, le style</span></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Paie l'acompte</strong><span>50€ sécurisé via Stripe</span></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Confirmation sous 48h</strong><span>Chiino valide le créneau par email</span></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-body"><strong>Consultation préalable</strong><span>Échange sur le dessin avant la séance</span></div></div>
+        </div>
+        <div class="deposit-box">
+          <p><strong>Important :</strong> l'acompte n'est pas remboursable en cas d'annulation à moins de 72h. En cas de report, il est conservé pour la prochaine séance.</p>
+        </div>
+      </div>
+      <div class="booking-form">
+        <div class="form-grid">
+          <div class="fg"><label for="reservation-prenom">Prénom</label><input id="reservation-prenom" type="text" placeholder="Jordan"></div>
+          <div class="fg"><label for="reservation-nom">Nom</label><input id="reservation-nom" type="text" placeholder="Dupont"></div>
+          <div class="fg"><label for="reservation-telephone">Téléphone</label><input id="reservation-telephone" type="tel" placeholder="+33 6 00 00 00 00"></div>
+          <div class="fg"><label for="reservation-style">Style souhaité</label><select id="reservation-style"><option>Lettering</option><option>Florale</option><option>Géométrique</option><option>Japonais</option><option>Old School</option><option>Autre</option></select></div>
+          <div class="fg"><label for="reservation-zone">Zone du corps</label><input id="reservation-zone" type="text" placeholder="Avant-bras, épaule..."></div>
+          <div class="fg"><label for="reservation-taille">Taille estimée</label><select id="reservation-taille"><option>Petit (< 5cm)</option><option>Moyen (5-15cm)</option><option>Grand (15-30cm)</option><option>Très grand (30cm+)</option></select></div>
+          <div class="fg"><label for="reservation-day">Jour souhaité</label><input id="reservation-day" type="date"></div>
+          <div class="fg"><label for="reservation-period">Moment de la journée</label><select id="reservation-period"><option value="">Choisir un moment</option><option value="matin">Matin</option><option value="apres-midi">Après-midi</option><option value="soiree">Soirée</option></select></div>
+          <div class="fg full booking-slot-picker"><small class="booking-slot-hint">Le jour choisi doit être au minimum à 48h. L'heure exacte sera ajustée ensuite par le tatoueur.</small></div>
+          <div class="fg full">
+            <label for="reservation-images">Images de référence (optionnel)</label>
+            <input id="reservation-images" type="file" accept="image/*" multiple>
+            <small id="reservation-images-hint" class="booking-slot-hint">Tu peux joindre jusqu'à 4 images (5 Mo max par image).</small>
+          </div>
+          <div class="fg full"><label for="reservation-description">Description du projet</label><textarea id="reservation-description" placeholder="Raconte-moi ton idée, une référence visuelle si tu en as, ce que ça représente pour toi..."></textarea></div>
+        </div>
+        <div class="deposit-amount">
+          <span>Acompte de confirmation</span>
+          <strong>50 €</strong>
+        </div>
+        <button id="deposit-btn" class="btn-pay">Confirmer & payer l'acompte -&gt;</button>
+        <p id="deposit-feedback" class="deposit-feedback" aria-live="polite"></p>
+        <p class="secure-note">Paiement sécurisé SSL - Stripe - Aucune CB enregistrée</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <a href="index.html" class="f-logo-link"><div class="f-logo">CHIINO<span>.</span></div></a>
+    <div class="f-links">
+      <a href="https://www.instagram.com/dctattoo_arts/" target="_blank" rel="noopener noreferrer">Instagram</a>
+      <a href="https://www.tiktok.com/@dctattoo_arts" target="_blank" rel="noopener noreferrer">TikTok</a>
+      <a href="mentions-legales.html">Mentions légales</a>
+      <a href="cgv.html">CGV</a>
+      <a href="admin.html">Back-office</a>
+    </div>
+    <span class="f-copy">© 2026 Chiino - Strasbourg<br>Site web réalisé par Téo Lefébure</span>
+  </footer>
+  <script src="app.js"></script>
+</body>
+</html>

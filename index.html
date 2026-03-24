@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="Assets/favicon-flat.png?v=3">
+  <script src="https://js.stripe.com/v3"></script>
+  <title>Chiino - Accueil</title>
+</head>
+<body>
+  <nav>
+    <a href="index.html"><div class="logo">CHIINO<span>.</span></div></a>
+    <div class="nav-links">
+      <button class="nav-btn active" onclick="window.location.href='index.html'">Accueil</button>
+      <button class="nav-btn" onclick="window.location.href='realisations.html'">Réalisations</button>
+      <button class="nav-btn" onclick="window.location.href='boutique.html'">Boutique</button>
+      <button class="nav-btn" onclick="window.location.href='contact.html'">Contact</button>
+    </div>
+    <button class="nav-cta" onclick="window.location.href='reservation.html'">Prendre RDV</button>
+  </nav>
+
+  <div id="page-accueil" class="page active">
+    <section class="hero">
+      <div class="hero-left">
+        <div>
+          <p class="eyebrow">Tattoo artist - Strasbourg, FR</p>
+          <h1 class="hero-title">TON<br>ENCRE,<br><em>TON<br>HISTOIRE.</em></h1>
+          <p class="hero-sub">Chiino crée des tatouages uniques, nés d'un dialogue sincère. <br> Chaque trait est posé avec intention - jamais deux fois le même.</p>
+          <div class="hero-actions">
+            <button class="btn-prim" onclick="window.location.href='reservation.html'">Prendre RDV</button>
+            <button class="btn-sec" onclick="window.location.href='realisations.html'">Mes réalisations</button>
+          </div>
+        </div>
+        <div class="hero-stats">
+          <div class="stat"><span>3+</span><small>Ans d'expérience</small></div>
+          <div class="stat"><span>150+</span><small>Pièces réalisées</small></div>
+          <div class="stat"><span>100%</span><small>Sur-mesure</small></div>
+        </div>
+      </div>
+      <div class="hero-right">
+        <img src="Assets/home.png" alt="Portrait de Chiino dans son studio" loading="eager" fetchpriority="high" decoding="async">
+        <div class="hero-badge">
+          <strong>Prochain créneau</strong>
+          <span>Jeudi 19 mars - 11h00</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="marquee">
+      <div class="marquee-inner">
+        <span class="m-item">Géométrique</span><span class="m-dot"> * </span>
+        <span class="m-item">Japonais</span><span class="m-dot"> * </span>
+        <span class="m-item">Old School</span><span class="m-dot"> * </span>
+        <span class="m-item">Lettering</span><span class="m-dot"> * </span>
+        <span class="m-item">Flash Custom</span><span class="m-dot"> * </span>
+        <span class="m-item">Florale</span><span class="m-dot"> * </span>
+        <span class="m-item">Géométrique</span><span class="m-dot"> * </span>
+        <span class="m-item">Japonais</span><span class="m-dot"> * </span>
+        <span class="m-item">Old School</span><span class="m-dot"> * </span>
+        <span class="m-item">Lettering</span><span class="m-dot"> * </span>
+        <span class="m-item">Flash Custom</span><span class="m-dot"> * </span>
+        <span class="m-item">Florale</span><span class="m-dot"> * </span>
+      </div>
+    </div>
+
+    <section class="home-bestsellers">
+      <div class="sec-hd">
+        <h2 class="sec-title">Best-stellers<span style="color:var(--accent)">.</span></h2>
+        <button class="sec-link" onclick="window.location.href='boutique.html'">Voir la boutique</button>
+      </div>
+      <div class="home-best-grid">
+        <article class="home-best-card">
+          <div class="home-best-media"><img src="Assets/pot.png" alt="Crème réparatrice" loading="lazy" decoding="async"></div>
+          <div class="home-best-body">
+            <h3>Crème réparatrice</h3>
+            <p>Hydratation et confort de la peau tatouée.</p>
+            <div class="home-best-foot"><span>28€</span><button class="add-btn" onclick="window.location.href='boutique.html'">Voir</button></div>
+          </div>
+        </article>
+        <article class="home-best-card">
+          <div class="home-best-media"><img src="Assets/gel.png" alt="Gel cicatrisant" loading="lazy" decoding="async"></div>
+          <div class="home-best-body">
+            <h3>Gel cicatrisant</h3>
+            <p>Soin quotidien pour préserver l'éclat du tatouage.</p>
+            <div class="home-best-foot"><span>22€</span><button class="add-btn" onclick="window.location.href='boutique.html'">Voir</button></div>
+          </div>
+        </article>
+        <article class="home-best-card">
+          <div class="home-best-media"><img src="Assets/t-shirt.png" alt="T-shirt Logo Chiino" loading="lazy" decoding="async"></div>
+          <div class="home-best-body">
+            <h3>T-shirt - Logo Chiino</h3>
+            <p>Coupe unisexe, coton bio, série studio.</p>
+            <div class="home-best-foot"><span>36€</span><button class="add-btn" onclick="window.location.href='boutique.html'">Voir</button></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <div class="services-title-wrap">
+      <h2 class="sec-title">Services<span style="color:var(--accent)">.</span></h2>
+    </div>
+
+    <section class="services">
+      <div class="svc">
+        <p class="svc-num">01 -</p>
+        <h3 class="svc-name">Flash & micro</h3>
+        <p class="svc-desc">Motifs disponibles en séance, sans rendez-vous programmé longtemps à l'avance. Petits formats, grand impact.</p>
+      </div>
+      <div class="svc">
+        <p class="svc-num">02 -</p>
+        <h3 class="svc-name">Pièce sur-mesure</h3>
+        <p class="svc-desc">Un projet unique, né d'un échange. Du croquis à l'encrage, chaque étape est co-construite avec toi.</p>
+      </div>
+      <div class="svc">
+        <p class="svc-num">03 -</p>
+        <h3 class="svc-name">Grand projet</h3>
+        <p class="svc-desc">Sleeve, demi-sleeve, dos complet. Des projets ambitieux pensés sur plusieurs séances, avec une vision d'ensemble.</p>
+      </div>
+    </section>
+
+    <section class="home-gallery">
+      <div class="sec-hd">
+        <h2 class="sec-title">Dernières réalisations<span style="color:var(--accent)">.</span></h2>
+        <button class="sec-link" onclick="window.location.href='realisations.html'">Voir tout</button>
+      </div>
+      <div class="mini-grid">
+        <div class="mini-cell"><img class="tilt-left" src="Assets/bras-ciel.png" alt="Tatouage ciel" loading="lazy" decoding="async"><div class="cell-overlay"><span class="cell-tag">Flash custom</span></div></div>
+        <div class="mini-cell"><img class="tilt-right" src="Assets/cou-japon.png" alt="Tatouage cou" loading="lazy" decoding="async"><div class="cell-overlay"><span class="cell-tag">Japonais</span></div></div>
+        <div class="mini-cell"><img class="tilt-left" src="Assets/bras-lettres.png" alt="Tatouage lettering" loading="lazy" decoding="async"><div class="cell-overlay"><span class="cell-tag">Lettering</span></div></div>
+        <div class="mini-cell"><img class="tilt-right" src="Assets/bras-temps.png" alt="Tatouage bras" loading="lazy" decoding="async"><div class="cell-overlay"><span class="cell-tag">Flash custom</span></div></div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+      <a href="index.html" class="f-logo-link"><div class="f-logo">CHIINO<span>.</span></div></a>
+    <div class="f-links">
+      <a href="https://www.instagram.com/dctattoo_arts/" target="_blank" rel="noopener noreferrer">Instagram</a>
+      <a href="https://www.tiktok.com/@dctattoo_arts" target="_blank" rel="noopener noreferrer">TikTok</a>
+      <a href="mentions-legales.html">Mentions légales</a>
+      <a href="cgv.html">CGV</a>
+      <a href="admin.html">Back-office</a>
+    </div>
+    <span class="f-copy">© 2026 Chiino - Strasbourg<br>Site web réalisé par Téo Lefébure</span>
+  </footer>
+  <div id="lightbox" class="lightbox" aria-hidden="true" role="dialog" aria-modal="true" tabindex="-1">
+    <button id="lightbox-close" class="lightbox-close" aria-label="Fermer">x</button>
+    <img id="lightbox-image" src="" alt="Agrandissement tatouage">
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1235,6 +1235,10 @@ function initAdminBackoffice() {
     if (moduleProducts) moduleProducts.style.display = key === 'products' ? '' : 'none';
     if (moduleReals) moduleReals.style.display = key === 'reals' ? '' : 'none';
     if (moduleSchedule) moduleSchedule.style.display = key === 'schedule' ? '' : 'none';
+    if (key === 'schedule') {
+      adminPlannerWeekStartState = null;
+      renderAdminSchedulePlanner();
+    }
   };
 
   const unlockPanel = async () => {

@@ -480,11 +480,7 @@ app.use('/api/admin/login', loginLimiter);
 app.use('/api/contact-message', publicLimiter);
 app.use('/api/create-deposit-session', publicLimiter);
 
-const BLOCKED_PATHS = ['/server.js', '/package.json', '/package-lock.json', '/Dockerfile', '/fly.toml', '/.env'];
-BLOCKED_PATHS.forEach((p) => app.get(p, (_req, res) => res.status(403).end()));
-app.use('/data', (_req, res) => res.status(403).end());
-
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/public-config', (req, res) => {
   res.json({ publishableKey });

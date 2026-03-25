@@ -31,6 +31,20 @@ TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_FROM_NUMBER=
 TWILIO_TO_NUMBER=
+
+# Envoi fournisseur (dropshipping)
+# true = simulation locale, false = appel API réel fournisseur
+SUPPLIER_SIMULATION=true
+
+# Token API fournisseur TAT-EU
+TAT_EU_API_KEY=
+
+# Endpoint de dispatch TAT-EU (obligatoire si SUPPLIER_SIMULATION=false)
+SUPPLIER_DISPATCH_URL_TAT_EU=
+
+# Flux actuel: envoi manuel des commandes depuis le back-office
+# Le webhook Stripe enregistre la commande, puis le propriétaire clique
+# sur "Envoyer a TAT-EU" dans le module Commandes.
 ```
 
 ## Déploiement (Fly.io)

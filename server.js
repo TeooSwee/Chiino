@@ -29,6 +29,9 @@ const freeMobileUser = String(process.env.FREE_MOBILE_USER || '').trim();
 const freeMobilePass = String(process.env.FREE_MOBILE_PASS || '').trim();
 const smsSimulationEnabled = String(process.env.SMS_SIMULATION || '').trim().toLowerCase() === 'true';
 
+const supplierSimulationEnabled = String(process.env.SUPPLIER_SIMULATION || 'true').trim().toLowerCase() === 'true';
+const tatEuApiKey = String(process.env.TAT_EU_API_KEY || '').trim();
+
 const stripe = secretKey ? new Stripe(secretKey) : null;
 let twilioClient = null;
 let twilioClientDisabled = false;
@@ -194,13 +197,19 @@ function upsertShopOrderFromSession(session, metadata, itemsLabel) {
   const store = readOrdersData();
   const nowIso = new Date().toISOString();
   const stripeSessionId = String(session.id || '').trim();
+  const orderRef = String(metadata.orderRef || '').trim() || ('CMD-' + Date.now().toString(36).toUpperCase());
   if (!stripeSessionId) return null;
 
-  const index = store.orders.findIndex((order) => String(order.stripeSessionId || '') === stripeSessionId);
+  const index = store.orders.findIndex((order) => {
+    const bySession = String(order.stripeSessionId || '') === stripeSessionId;
+    const byRef = orderRef && String(order.orderRef || '') === orderRef;
+    return bySession || byRef;
+  });
   const order = {
     id: index >= 0 ? String(store.orders[index].id || ('ord-' + Date.now().toString(36))) : ('ord-' + Date.now().toString(36)),
-    orderRef: String(metadata.orderRef || '').trim() || ('CMD-' + Date.now().toString(36).toUpperCase()),
+    orderRef,
     stripeSessionId,
+    stripePaymentIntentId: index >= 0 ? String(store.orders[index].stripePaymentIntentId || '').trim() : '',
     status: normalizeOrderStatus(index >= 0 ? store.orders[index].status : 'paid'),
     customerName: String(session.customer_details?.name || metadata.clientName || '').trim() || 'Non renseigne',
     customerEmail: String(session.customer_details?.email || '').trim(),
@@ -209,6 +218,60 @@ function upsertShopOrderFromSession(session, metadata, itemsLabel) {
     itemsLabel: String(itemsLabel || metadata.items || '').trim(),
     suppliers: String(metadata.suppliers || '').trim(),
     shippingSummary: String(metadata.shippingSummary || '').trim(),
+    skuLines: String(metadata.skuLines || '').trim(),
+    dispatchStatus: index >= 0 ? String(store.orders[index].dispatchStatus || 'pending') : 'pending',
+    supplierProvider: index >= 0 ? String(store.orders[index].supplierProvider || '').trim() : '',
+    supplierOrderId: index >= 0 ? String(store.orders[index].supplierOrderId || '').trim() : '',
+    dispatchMessage: index >= 0 ? String(store.orders[index].dispatchMessage || '').trim() : '',
+    dispatchedAt: index >= 0 ? String(store.orders[index].dispatchedAt || '').trim() : '',
+    trackingNumber: index >= 0 ? String(store.orders[index].trackingNumber || '').trim() : '',
+    adminNote: index >= 0 ? String(store.orders[index].adminNote || '').trim() : '',
+    createdAt: index >= 0 ? String(store.orders[index].createdAt || nowIso) : nowIso,
+    updatedAt: nowIso
+  };
+
+  if (index >= 0) {
+    store.orders[index] = { ...store.orders[index], ...order };
+  } else {
+    store.orders.push(order);
+  }
+
+  writeOrdersData(store);
+  return order;
+}
+
+function upsertShopOrderFromPaymentIntent(paymentIntent, metadata, itemsLabel, customerName, customerEmail) {
+  const store = readOrdersData();
+  const nowIso = new Date().toISOString();
+  const paymentIntentId = String(paymentIntent.id || '').trim();
+  const orderRef = String(metadata.orderRef || '').trim() || ('CMD-' + Date.now().toString(36).toUpperCase());
+  if (!paymentIntentId) return null;
+
+  const index = store.orders.findIndex((order) => {
+    const byPi = String(order.stripePaymentIntentId || '') === paymentIntentId;
+    const byRef = orderRef && String(order.orderRef || '') === orderRef;
+    return byPi || byRef;
+  });
+
+  const order = {
+    id: index >= 0 ? String(store.orders[index].id || ('ord-' + Date.now().toString(36))) : ('ord-' + Date.now().toString(36)),
+    orderRef,
+    stripeSessionId: index >= 0 ? String(store.orders[index].stripeSessionId || '').trim() : '',
+    stripePaymentIntentId: paymentIntentId,
+    status: normalizeOrderStatus(index >= 0 ? store.orders[index].status : 'paid'),
+    customerName: String(customerName || '').trim() || 'Non renseigne',
+    customerEmail: String(customerEmail || '').trim(),
+    amountTotal: Number(paymentIntent.amount || 0),
+    currency: String(paymentIntent.currency || 'eur').trim().toLowerCase(),
+    itemsLabel: String(itemsLabel || metadata.items || '').trim(),
+    suppliers: String(metadata.suppliers || '').trim(),
+    shippingSummary: String(metadata.shippingSummary || '').trim(),
+    skuLines: String(metadata.skuLines || '').trim(),
+    dispatchStatus: index >= 0 ? String(store.orders[index].dispatchStatus || 'pending') : 'pending',
+    supplierProvider: index >= 0 ? String(store.orders[index].supplierProvider || '').trim() : '',
+    supplierOrderId: index >= 0 ? String(store.orders[index].supplierOrderId || '').trim() : '',
+    dispatchMessage: index >= 0 ? String(store.orders[index].dispatchMessage || '').trim() : '',
+    dispatchedAt: index >= 0 ? String(store.orders[index].dispatchedAt || '').trim() : '',
     trackingNumber: index >= 0 ? String(store.orders[index].trackingNumber || '').trim() : '',
     adminNote: index >= 0 ? String(store.orders[index].adminNote || '').trim() : '',
     createdAt: index >= 0 ? String(store.orders[index].createdAt || nowIso) : nowIso,
@@ -482,12 +545,138 @@ async function sendOwnerNotification(subject, lines) {
 }
 
 const catalog = {
-  'FLASH-GEO-V3': { name: 'Crème réparatrice', amount: 2800, currency: 'eur', supplier: 'Printify', shipping: '5-7 jours ouvres' },
-  'SOIN-GEL-50': { name: 'Gel cicatrisant', amount: 2200, currency: 'eur', supplier: 'BigBuy', shipping: '3-5 jours ouvres' },
-  'FLASH-SERPENTS': { name: 'Flash Tattoo', amount: 1500, currency: 'eur', supplier: 'Printify', shipping: '5-7 jours ouvres' },
-  'NOTEBOOK-CHIINO': { name: 'Carnet de croquis - Chiino', amount: 1200, currency: 'eur', supplier: 'Printful', shipping: '4-7 jours ouvres' },
-  'TSHIRT-CHIINO': { name: 'T-shirt - Logo Chiino', amount: 3600, currency: 'eur', supplier: 'Printful', shipping: '5-10 jours ouvres' }
+  'FLASH-GEO-V3': { name: 'Crème réparatrice', amount: 2800, currency: 'eur', supplier: 'TAT-EU', supplierSku: 'FLASH-GEO-V3', shipping: '3-6 jours ouvres' },
+  'SOIN-GEL-50': { name: 'Gel cicatrisant', amount: 2200, currency: 'eur', supplier: 'TAT-EU', supplierSku: 'SOIN-GEL-50', shipping: '3-6 jours ouvres' },
+  'FLASH-SERPENTS': { name: 'Flash Tattoo', amount: 1500, currency: 'eur', supplier: 'TAT-EU', supplierSku: 'FLASH-SERPENTS', shipping: '3-6 jours ouvres' },
+  'NOTEBOOK-CHIINO': { name: 'Carnet de croquis - Chiino', amount: 1200, currency: 'eur', supplier: 'TAT-EU', supplierSku: 'NOTEBOOK-CHIINO', shipping: '3-6 jours ouvres' },
+  'TSHIRT-CHIINO': { name: 'T-shirt - Logo Chiino', amount: 3600, currency: 'eur', supplier: 'TAT-EU', supplierSku: 'TSHIRT-CHIINO', shipping: '3-6 jours ouvres' }
 };
+
+function parseSkuLines(rawSkuLines) {
+  return String(rawSkuLines || '')
+    .split('|')
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const parts = chunk.split('x');
+      const sku = String(parts[0] || '').trim();
+      const qty = Math.max(1, Math.min(20, Number(parts[1] || 1)));
+      return { sku, qty };
+    })
+    .filter((item) => item.sku && Number.isFinite(item.qty));
+}
+
+function getSupplierToken(providerName) {
+  const key = String(providerName || '').toLowerCase().trim();
+  if (key === 'tat-eu' || key === 'tateu' || key === 'tat_eu') return tatEuApiKey;
+  return '';
+}
+
+function supplierToEnvSuffix(providerName) {
+  return String(providerName || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+async function sendSupplierOrder(order) {
+  const skuItems = parseSkuLines(order.skuLines);
+  const providers = Array.from(new Set(
+    skuItems
+      .map((item) => catalog[item.sku]?.supplier)
+      .filter(Boolean)
+  ));
+
+  if (!providers.length) {
+    return { ok: false, dispatchStatus: 'failed', message: 'Aucun fournisseur déterminé', provider: '', supplierOrderId: '' };
+  }
+
+  const provider = providers[0];
+  const payload = {
+    orderRef: order.orderRef,
+    stripeSessionId: order.stripeSessionId,
+    customerName: order.customerName,
+    customerEmail: order.customerEmail,
+    items: skuItems.map((item) => ({
+      sku: item.sku,
+      supplierSku: catalog[item.sku]?.supplierSku || item.sku,
+      qty: item.qty
+    }))
+  };
+
+  if (supplierSimulationEnabled) {
+    return {
+      ok: true,
+      dispatchStatus: 'sent',
+      provider,
+      supplierOrderId: 'SIM-' + Date.now().toString(36).toUpperCase(),
+      message: 'Commande fournisseur simulée'
+    };
+  }
+
+  const token = getSupplierToken(provider);
+  if (!token) {
+    return { ok: false, dispatchStatus: 'failed', message: `Token API manquant pour ${provider}`, provider, supplierOrderId: '' };
+  }
+
+  // Endpoint générique: remplacez SUPPLIER_DISPATCH_URL_* par vos endpoints réels fournisseur.
+  const providerEnvKey = 'SUPPLIER_DISPATCH_URL_' + supplierToEnvSuffix(provider);
+  const dispatchUrl = String(process.env[providerEnvKey] || '').trim();
+  if (!dispatchUrl) {
+    return { ok: false, dispatchStatus: 'failed', message: `Endpoint manquant (${providerEnvKey})`, provider, supplierOrderId: '' };
+  }
+
+  const response = await fetch(dispatchUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const reason = await response.text().catch(() => 'dispatch-error');
+    return { ok: false, dispatchStatus: 'failed', message: reason.slice(0, 240), provider, supplierOrderId: '' };
+  }
+
+  const data = await response.json().catch(() => ({}));
+  return {
+    ok: true,
+    dispatchStatus: 'sent',
+    provider,
+    supplierOrderId: String(data.orderId || data.id || ('EXT-' + Date.now().toString(36).toUpperCase())),
+    message: 'Commande fournisseur créée'
+  };
+}
+
+async function dispatchOrderToSupplierById(orderId) {
+  const store = readOrdersData();
+  const index = store.orders.findIndex((order) => String(order.id || '').trim() === String(orderId || '').trim());
+  if (index === -1) {
+    return { ok: false, error: 'order-not-found' };
+  }
+
+  const current = store.orders[index];
+  if (String(current.dispatchStatus || '') === 'sent' && String(current.supplierOrderId || '').trim()) {
+    return { ok: true, alreadySent: true, order: current };
+  }
+
+  const result = await sendSupplierOrder(current);
+  const updated = {
+    ...current,
+    dispatchStatus: result.dispatchStatus,
+    supplierProvider: result.provider || current.supplierProvider || '',
+    supplierOrderId: result.supplierOrderId || current.supplierOrderId || '',
+    dispatchMessage: String(result.message || '').trim(),
+    dispatchedAt: result.ok ? new Date().toISOString() : (current.dispatchedAt || ''),
+    updatedAt: new Date().toISOString()
+  };
+
+  store.orders[index] = updated;
+  writeOrdersData(store);
+  return { ok: Boolean(result.ok), order: updated, error: result.ok ? '' : 'dispatch-failed' };
+}
 
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripe || !webhookSecret) {
@@ -538,16 +727,18 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
           }
         }
 
-        upsertShopOrderFromSession(session, metadata, itemsLabel);
+        const order = upsertShopOrderFromSession(session, metadata, itemsLabel);
 
         await sendOwnerNotification('Nouvel achat boutique', [
           `Session: ${session.id}`,
+          `Commande: ${order?.orderRef || order?.id || 'Non disponible'}`,
           `Montant: ${amountLabel}`,
           `Client: ${customerName}`,
           `Email Stripe: ${customerEmail}`,
           `Produits: ${itemsLabel || 'Non disponible'}`,
           `Fournisseurs: ${String(metadata.suppliers || '').trim() || 'Non disponible'}`,
-          `Delais expedition: ${String(metadata.shippingSummary || '').trim() || 'Non disponible'}`
+          `Delais expedition: ${String(metadata.shippingSummary || '').trim() || 'Non disponible'}`,
+          'Action requise: envoi manuel vers TAT-EU depuis le back-office.'
         ]);
       }
 
@@ -560,6 +751,35 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
           `Jour: ${String(metadata.selectedDate || '').trim() || 'Non renseigné'}`,
           `Moment: ${String(metadata.selectedPeriod || '').trim() || 'Non renseigné'}`,
           `Réservation: ${String(metadata.reservationId || '').trim() || 'Non renseigné'}`
+        ]);
+      }
+    }
+
+    if (event.type === 'payment_intent.succeeded') {
+      const paymentIntent = event.data.object;
+      const metadata = paymentIntent.metadata || {};
+      const orderType = String(metadata.orderType || '').trim();
+
+      if (orderType === 'shop') {
+        const charge = Array.isArray(paymentIntent.charges?.data) ? paymentIntent.charges.data[0] : null;
+        const billing = charge?.billing_details || {};
+        const customerName = String(billing.name || metadata.clientName || '').trim() || 'Non renseigné';
+        const customerEmail = String(billing.email || '').trim() || 'Non renseigné';
+        const amountLabel = formatAmount(paymentIntent.amount, paymentIntent.currency);
+        const itemsLabel = String(metadata.items || '').trim();
+
+        const order = upsertShopOrderFromPaymentIntent(paymentIntent, metadata, itemsLabel, customerName, customerEmail);
+
+        await sendOwnerNotification('Nouvel achat boutique', [
+          `Paiement: ${paymentIntent.id}`,
+          `Commande: ${order?.orderRef || order?.id || 'Non disponible'}`,
+          `Montant: ${amountLabel}`,
+          `Client: ${customerName}`,
+          `Email Stripe: ${customerEmail}`,
+          `Produits: ${itemsLabel || 'Non disponible'}`,
+          `Fournisseurs: ${String(metadata.suppliers || '').trim() || 'Non disponible'}`,
+          `Delais expedition: ${String(metadata.shippingSummary || '').trim() || 'Non disponible'}`,
+          'Action requise: envoi manuel vers TAT-EU depuis le back-office.'
         ]);
       }
     }
@@ -682,6 +902,12 @@ app.put('/api/admin/orders/:id/status', requireAdmin, (req, res) => {
   }
 
   const previous = data.orders[index];
+  const dispatchStatus = String(previous.dispatchStatus || '').trim().toLowerCase();
+  const requiresDispatch = status === 'fulfilled' || status === 'delivered';
+  if (requiresDispatch && dispatchStatus !== 'sent') {
+    return res.status(400).json({ error: 'Impossible de passer en expediée/livrée avant envoi manuel a TAT-EU.' });
+  }
+
   data.orders[index] = {
     ...previous,
     status,
@@ -692,6 +918,15 @@ app.put('/api/admin/orders/:id/status', requireAdmin, (req, res) => {
 
   writeOrdersData(data);
   return res.json({ order: data.orders[index] });
+});
+
+app.post('/api/admin/orders/:id/dispatch', requireAdmin, async (req, res) => {
+  const id = String(req.params.id || '').trim();
+  const result = await dispatchOrderToSupplierById(id);
+  if (!result.ok && !result.alreadySent) {
+    return res.status(400).json({ error: 'Envoi fournisseur impossible', order: result.order || null });
+  }
+  return res.json({ ok: true, alreadySent: Boolean(result.alreadySent), order: result.order || null });
 });
 
 app.post('/api/admin/products', requireAdmin, (req, res) => {
@@ -986,6 +1221,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
   const lineItems = [];
   const metadataItems = [];
+  const metadataSkuLines = [];
   const metadataSuppliers = [];
   const metadataShipping = [];
   const orderRef = 'CMD-' + Date.now().toString(36).toUpperCase();
@@ -1009,6 +1245,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
     });
 
     metadataItems.push(`${product.name} x${qty}`);
+    metadataSkuLines.push(`${sku}x${qty}`);
     if (product.supplier) metadataSuppliers.push(product.supplier);
     if (product.shipping) metadataShipping.push(product.shipping);
   }
@@ -1029,6 +1266,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
         orderType: 'shop',
         orderRef,
         items: metadataItems.join(', ').slice(0, 500),
+        skuLines: metadataSkuLines.join('|').slice(0, 500),
         suppliers: metadataSuppliersLabel,
         shippingSummary: metadataShippingLabel
       },
@@ -1039,6 +1277,75 @@ app.post('/api/create-checkout-session', async (req, res) => {
     return res.json({ sessionId: session.id });
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Stripe session creation failed' });
+  }
+});
+
+app.post('/api/create-payment-intent', async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe secret key is missing on server' });
+  }
+
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!items.length) {
+    return res.status(400).json({ error: 'Cart is empty' });
+  }
+
+  let amount = 0;
+  const metadataItems = [];
+  const metadataSkuLines = [];
+  const metadataSuppliers = [];
+  const metadataShipping = [];
+  const orderRef = 'CMD-' + Date.now().toString(36).toUpperCase();
+
+  for (const item of items) {
+    const sku = String(item.sku || '').trim();
+    const qty = Math.max(1, Math.min(20, Number(item.qty || 1)));
+    const product = catalog[sku];
+
+    if (!product) {
+      return res.status(400).json({ error: `Unknown SKU: ${sku}` });
+    }
+
+    amount += Number(product.amount || 0) * qty;
+    metadataItems.push(`${product.name} x${qty}`);
+    metadataSkuLines.push(`${sku}x${qty}`);
+    if (product.supplier) metadataSuppliers.push(product.supplier);
+    if (product.shipping) metadataShipping.push(product.shipping);
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'Invalid amount' });
+  }
+
+  const incomingSuppliers = String(req.body?.supplierSummary || '').trim();
+  const incomingShippingSummary = String(req.body?.shippingSummary || '').trim();
+  const computedSuppliers = Array.from(new Set(metadataSuppliers)).join(', ');
+  const computedShipping = Array.from(new Set(metadataShipping)).join(', ');
+  const metadataSuppliersLabel = (incomingSuppliers || computedSuppliers).slice(0, 500);
+  const metadataShippingLabel = (incomingShippingSummary || computedShipping).slice(0, 500);
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency: 'eur',
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        orderType: 'shop',
+        orderRef,
+        items: metadataItems.join(', ').slice(0, 500),
+        skuLines: metadataSkuLines.join('|').slice(0, 500),
+        suppliers: metadataSuppliersLabel,
+        shippingSummary: metadataShippingLabel
+      }
+    });
+
+    return res.json({
+      clientSecret: paymentIntent.client_secret,
+      orderRef,
+      amount
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Stripe payment intent creation failed' });
   }
 });
 

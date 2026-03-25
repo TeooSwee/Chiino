@@ -405,8 +405,6 @@ nav > a:active{
 .product-modal-body h3{font-family:'Syne',sans-serif;font-size:28px;letter-spacing:-1px}
 .product-modal-desc{font-size:12px;color:var(--muted);line-height:1.9}
 .product-modal-price{font-family:'Syne',sans-serif;font-size:24px;color:var(--accent)}
-.product-modal-meta{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--border);border-radius:4px;background:rgba(13,31,60,0.3)}
-.product-modal-meta p{font-size:11px;color:var(--muted);line-height:1.6}
 .product-modal-option-wrap{display:flex;flex-direction:column;gap:6px}
 .product-modal-option-wrap label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
 .product-modal-option-wrap select{
@@ -472,6 +470,63 @@ nav > a:active{
 .stripe-preview-actions{display:flex;gap:10px}
 .stripe-preview-actions .add-btn{flex:1}
 .stripe-preview-actions .btn-pay{flex:1}
+
+.stripe-embedded-payment{
+  position:fixed;
+  inset:0;
+  background:rgba(4,6,12,0.92);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  z-index:1460;
+}
+.stripe-embedded-payment.open{display:flex}
+.stripe-embedded-card{
+  width:min(560px,96vw);
+  background:var(--noir);
+  border:1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+}
+.stripe-embedded-head{
+  padding:16px 18px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.stripe-embedded-head strong{font-family:'Syne',sans-serif;font-size:18px}
+.stripe-embedded-close{
+  width:34px;
+  height:34px;
+  border:1px solid var(--border);
+  border-radius:50%;
+  background:var(--bleu);
+  color:var(--paper);
+  cursor:pointer;
+  font-size:20px;
+}
+.stripe-embedded-body{padding:16px 18px}
+.stripe-embedded-note{font-size:11px;color:var(--muted);margin-bottom:8px}
+.stripe-embedded-order{font-size:11px;color:var(--paper);margin-bottom:10px}
+.stripe-embedded-customer{display:grid;gap:8px;margin-bottom:10px}
+.stripe-embedded-customer .fg{gap:4px}
+.stripe-embedded-customer .fg label{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.stripe-embedded-customer .fg input{
+  background:rgba(13,31,60,.4);
+  border:1px solid var(--border);
+  color:var(--paper);
+  padding:10px 12px;
+  border-radius:4px;
+  font-size:12px;
+  font-family:'Inter',sans-serif;
+}
+.stripe-embedded-element{padding:8px;border:1px solid var(--border);border-radius:6px;background:rgba(13,31,60,.24)}
+.stripe-embedded-error{margin-top:10px;min-height:16px;font-size:11px;color:#ffb7c1}
+.stripe-embedded-actions{display:flex;gap:10px;margin-top:12px}
+.stripe-embedded-actions .add-btn{flex:1}
+.stripe-embedded-actions .btn-pay{flex:1}
 
 .floating-cart{
   position:fixed;

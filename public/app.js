@@ -98,8 +98,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'FLASH-GEO-V3',
     name: 'Crème réparatrice',
-    supplier: 'Printify',
-    shipping: '5-7 jours ouvres',
+    supplier: 'TAT-EU',
+    shipping: '3-6 jours ouvres',
     shortDesc: 'Hydratation de votre peau.',
     details: 'Crème réparatrice enrichie en agents apaisants pour nourrir la peau tatouée et aider à maintenir son confort au quotidien.',
     price: 28,
@@ -113,8 +113,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'SOIN-GEL-50',
     name: 'Gel cicatrisant',
-    supplier: 'BigBuy',
-    shipping: '3-5 jours ouvres',
+    supplier: 'TAT-EU',
+    shipping: '3-6 jours ouvres',
     shortDesc: 'Cicatrisation de votre tatouage',
     details: 'Gel cicatrisant à absorption rapide, conçu pour accompagner la phase de cicatrisation et protéger l\'éclat du tatouage.',
     price: 22,
@@ -128,8 +128,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'FLASH-SERPENTS',
     name: 'Flash Tattoo',
-    supplier: 'Printify',
-    shipping: '5-7 jours ouvres',
+    supplier: 'TAT-EU',
+    shipping: '3-6 jours ouvres',
     shortDesc: 'A5 couverture rigide, + 100 motifs',
     details: 'Flash Tattoo regroupant une sélection de motifs prêts à tatouer, avec un style marqué pour inspirer ton prochain projet.',
     price: 15,
@@ -143,8 +143,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'NOTEBOOK-CHIINO',
     name: 'Carnet de croquis - Chiino',
-    supplier: 'Printful',
-    shipping: '4-7 jours ouvres',
+    supplier: 'TAT-EU',
+    shipping: '3-6 jours ouvres',
     shortDesc: 'A5 couverture rigide, 40 pages',
     details: 'Carnet de croquis - Chiino idéal pour préparer des idées, esquisser des compositions et conserver ses références visuelles.',
     price: 12,
@@ -158,8 +158,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'TSHIRT-CHIINO',
     name: 'T-shirt - Logo Chiino',
-    supplier: 'Printful',
-    shipping: '5-10 jours ouvres',
+    supplier: 'TAT-EU',
+    shipping: '3-6 jours ouvres',
     shortDesc: 'Coton bio, noir, tailles S-XL',
     details: 'T-shirt - Logo Chiino en coton bio, coupe unisexe confortable, avec impression signature pour un look studio affirmé.',
     price: 36,
@@ -243,12 +243,35 @@ function persistStateToLocalStorage() {
 
 async function tryLoadStateFromServer() {
   try {
-    const data = await fetchJson('/api/admin/content');
+    const password = getAdminPasswordFromSession();
+    const headers = password ? { 'x-admin-password': password } : {};
+    const response = await fetch('/api/admin/content', { headers });
+
+    // Le serveur est joignable mais l'admin n'est pas encore authentifié.
+    if (response.status === 401 || response.status === 403) {
+      serverAdminAvailable = true;
+      return false;
+    }
+
+    if (!response.ok) {
+      throw new Error('request-failed');
+    }
+
+    const data = await response.json().catch(() => ({}));
     serverAdminAvailable = true;
     applyContentState(data);
     return true;
   } catch (error) {
     serverAdminAvailable = false;
+    return false;
+  }
+}
+
+async function isServerReachable() {
+  try {
+    const response = await fetch('/api/health');
+    return response.ok;
+  } catch (error) {
     return false;
   }
 }
@@ -769,7 +792,7 @@ function getOrderStatusLabel(status) {
   return 'Payee';
 }
 
-function getOrderStatusOptions(selected) {
+function getOrderStatusOptions(selected, canShipOrder) {
   const current = String(selected || 'paid').toLowerCase();
   const options = [
     { value: 'paid', label: 'Payee' },
@@ -782,8 +805,17 @@ function getOrderStatusOptions(selected) {
 
   return options.map((option) => {
     const selectedAttr = option.value === current ? ' selected' : '';
-    return '<option value="' + option.value + '"' + selectedAttr + '>' + option.label + '</option>';
+    const isShippingStatus = option.value === 'fulfilled' || option.value === 'delivered';
+    const disabledAttr = (!canShipOrder && isShippingStatus) ? ' disabled' : '';
+    return '<option value="' + option.value + '"' + selectedAttr + disabledAttr + '>' + option.label + '</option>';
   }).join('');
+}
+
+function getDispatchStatusLabel(status) {
+  const key = String(status || '').toLowerCase().trim();
+  if (key === 'sent') return 'Envoyee fournisseur';
+  if (key === 'failed') return 'Echec envoi';
+  return 'A envoyer manuellement';
 }
 
 function renderAdminOrders() {
@@ -809,6 +841,12 @@ function renderAdminOrders() {
       ? (Number(order.amountTotal) / 100).toFixed(2).replace('.', ',') + ' ' + String(order.currency || 'EUR').toUpperCase()
       : '0,00 EUR';
 
+    const canRetryDispatch = String(order.dispatchStatus || '') !== 'sent';
+    const canShipOrder = String(order.dispatchStatus || '').toLowerCase() === 'sent';
+    const dispatchButtonLabel = String(order.dispatchStatus || '') === 'failed'
+      ? 'Relancer envoi TAT-EU'
+      : 'Envoyer a TAT-EU';
+
     return '<div class="admin-order-row">' +
       '<div class="admin-order-top">' +
         '<strong>' + escapeHtml(order.orderRef || order.id || 'Commande') + '</strong>' +
@@ -817,12 +855,15 @@ function renderAdminOrders() {
       '<p class="admin-order-line">' + escapeHtml(createdAt) + ' • ' + escapeHtml(amountText) + '</p>' +
       '<p class="admin-order-line">Client: ' + escapeHtml(order.customerName || 'Non renseigne') + (order.customerEmail ? ' • ' + escapeHtml(order.customerEmail) : '') + '</p>' +
       '<p class="admin-order-line">Produits: ' + escapeHtml(order.itemsLabel || 'Non disponible') + '</p>' +
+      '<p class="admin-order-line">Fournisseur: ' + escapeHtml(order.supplierProvider || 'Auto') + ' • ' + escapeHtml(getDispatchStatusLabel(order.dispatchStatus)) + (order.supplierOrderId ? (' • Ref: ' + escapeHtml(order.supplierOrderId)) : '') + '</p>' +
+      (!canShipOrder ? '<p class="admin-order-line">Info: envoi manuel TAT-EU requis avant statut Expediee/Livree.</p>' : '') +
+      (order.dispatchMessage ? '<p class="admin-order-line">Detail envoi: ' + escapeHtml(order.dispatchMessage) + '</p>' : '') +
       '<div class="admin-order-controls">' +
-        '<select data-order-status="' + escapeHtml(order.id || '') + '">' + getOrderStatusOptions(order.status) + '</select>' +
+        '<select data-order-status="' + escapeHtml(order.id || '') + '" data-order-dispatched="' + (canShipOrder ? '1' : '0') + '">' + getOrderStatusOptions(order.status, canShipOrder) + '</select>' +
         '<input type="text" data-order-tracking="' + escapeHtml(order.id || '') + '" placeholder="Tracking" value="' + escapeHtml(order.trackingNumber || '') + '">' +
       '</div>' +
       '<textarea data-order-note="' + escapeHtml(order.id || '') + '" placeholder="Note interne">' + escapeHtml(order.adminNote || '') + '</textarea>' +
-      '<div class="admin-row-actions"><button class="add-btn" data-order-save="' + escapeHtml(order.id || '') + '">Enregistrer</button></div>' +
+      '<div class="admin-row-actions"><button class="add-btn" data-order-save="' + escapeHtml(order.id || '') + '">Enregistrer</button>' + (canRetryDispatch ? '<button class="add-btn" data-order-dispatch="' + escapeHtml(order.id || '') + '">' + dispatchButtonLabel + '</button>' : '') + '</div>' +
     '</div>';
   }).join('');
 }
@@ -1379,7 +1420,7 @@ function initAdminBackoffice() {
       return;
     }
 
-    const serverReachable = await tryLoadStateFromServer();
+    const serverReachable = await isServerReachable();
     if (serverReachable) {
       try {
         await fetchJson('/api/admin/login', {
@@ -1795,9 +1836,26 @@ function initAdminBackoffice() {
     const toggleDefaultProductId = event.target?.dataset?.toggleDefaultProduct;
     const toggleDefaultRealId = event.target?.dataset?.toggleDefaultReal;
     const orderSaveId = event.target?.dataset?.orderSave;
+    const orderDispatchId = event.target?.dataset?.orderDispatch;
     const scheduleDeleteId = event.target?.dataset?.scheduleDelete;
     const scheduleStatusId = event.target?.dataset?.scheduleStatus;
     const scheduleEditId = scheduleEditTarget?.dataset?.scheduleEdit;
+
+    if (orderDispatchId) {
+      if (!serverAdminAvailable) {
+        showAdminFeedback('Le suivi commandes nécessite le serveur actif.', 'err');
+        return;
+      }
+
+      try {
+        await adminApi('/api/admin/orders/' + encodeURIComponent(orderDispatchId) + '/dispatch', 'POST');
+        await loadAdminOrders();
+        showAdminFeedback('Relance fournisseur effectuée.', 'ok');
+      } catch (error) {
+        showAdminFeedback('Relance fournisseur impossible.', 'err');
+      }
+      return;
+    }
 
     if (orderSaveId) {
       if (!serverAdminAvailable) {
@@ -1808,6 +1866,13 @@ function initAdminBackoffice() {
       const statusInput = page.querySelector('[data-order-status="' + orderSaveId + '"]');
       const trackingInput = page.querySelector('[data-order-tracking="' + orderSaveId + '"]');
       const noteInput = page.querySelector('[data-order-note="' + orderSaveId + '"]');
+      const isDispatched = statusInput?.dataset?.orderDispatched === '1';
+      const wantedStatus = String(statusInput?.value || 'paid').toLowerCase();
+
+      if ((wantedStatus === 'fulfilled' || wantedStatus === 'delivered') && !isDispatched) {
+        showAdminFeedback('Envoi manuel TAT-EU requis avant statut Expediee/Livree.', 'err');
+        return;
+      }
 
       const payload = {
         status: statusInput?.value || 'paid',
@@ -1820,7 +1885,7 @@ function initAdminBackoffice() {
         await loadAdminOrders();
         showAdminFeedback('Commande mise à jour.', 'ok');
       } catch (error) {
-        showAdminFeedback('Mise à jour commande impossible côté serveur.', 'err');
+        showAdminFeedback(String(error?.message || 'Mise à jour commande impossible côté serveur.'), 'err');
       }
       return;
     }
@@ -2178,8 +2243,13 @@ if (lightbox) {
 
 document.addEventListener('keydown', (event) => {
   const stripePreview = document.getElementById('stripe-preview');
+  const stripeEmbedded = document.getElementById('stripe-embedded-payment');
   if (event.key === 'Escape' && stripePreview && stripePreview.classList.contains('open')) {
     stripePreview.querySelector('#stripe-preview-close')?.click();
+    return;
+  }
+  if (event.key === 'Escape' && stripeEmbedded && stripeEmbedded.classList.contains('open')) {
+    stripeEmbedded.querySelector('#stripe-embedded-close')?.click();
     return;
   }
   if (event.key === 'Escape' && reservationSlotModal && reservationSlotModal.classList.contains('open')) {
@@ -2212,8 +2282,6 @@ const productModalBadge = document.getElementById('product-modal-badge');
 const productModalTitle = document.getElementById('product-modal-title');
 const productModalDesc = document.getElementById('product-modal-desc');
 const productModalPrice = document.getElementById('product-modal-price');
-const productModalSupplier = document.getElementById('product-modal-supplier');
-const productModalShipping = document.getElementById('product-modal-shipping');
 const productModalOptionWrap = document.getElementById('product-modal-option-wrap');
 const productModalOptionLabel = document.getElementById('product-modal-option-label');
 const productModalOption = document.getElementById('product-modal-option');
@@ -2245,6 +2313,9 @@ const reservationSlotSelectedLabel = document.getElementById('reservation-slot-s
 let cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
 let stripeClientPromise = null;
 let stripePreviewConfirmAction = null;
+let shopPaymentElements = null;
+let shopPaymentStripe = null;
+let shopPaymentConfirmHandler = null;
 let reservationPickerWeekStart = null;
 let reservationSelectedSlot = null;
 let reservationDraftSlot = null;
@@ -2380,6 +2451,199 @@ async function startStripeCheckout(endpoint, payload) {
     return { ok: false, reason: redirect.error.message || 'redirect-error' };
   }
 
+  return { ok: true };
+}
+
+async function createStripePaymentIntent(payload) {
+  const response = await fetch('/api/create-payment-intent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {})
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.clientSecret) {
+    return { ok: false, reason: data.error || 'payment-intent-error' };
+  }
+
+  return {
+    ok: true,
+    clientSecret: data.clientSecret,
+    amount: Number(data.amount || 0),
+    orderRef: String(data.orderRef || '')
+  };
+}
+
+function ensureShopPaymentDom() {
+  let modal = document.getElementById('stripe-embedded-payment');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'stripe-embedded-payment';
+  modal.className = 'stripe-embedded-payment';
+  modal.setAttribute('aria-hidden', 'true');
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-label', 'Paiement sécurisé');
+  modal.setAttribute('tabindex', '-1');
+  modal.innerHTML =
+    '<div class="stripe-embedded-card">' +
+      '<div class="stripe-embedded-head">' +
+        '<strong>Paiement securise</strong>' +
+        '<button id="stripe-embedded-close" class="stripe-embedded-close" aria-label="Fermer">x</button>' +
+      '</div>' +
+      '<div class="stripe-embedded-body">' +
+        '<p id="stripe-embedded-note" class="stripe-embedded-note">Finalise ton paiement sans quitter la boutique.</p>' +
+        '<p id="stripe-embedded-order" class="stripe-embedded-order"></p>' +
+        '<div class="stripe-embedded-customer">' +
+          '<div class="fg"><label for="stripe-embedded-customer-name">Nom complet</label><input id="stripe-embedded-customer-name" type="text" placeholder="Ex: Lea Martin"></div>' +
+          '<div class="fg"><label for="stripe-embedded-customer-email">Email</label><input id="stripe-embedded-customer-email" type="email" placeholder="exemple@email.com"></div>' +
+          '<div class="fg"><label for="stripe-embedded-customer-phone">Telephone (optionnel)</label><input id="stripe-embedded-customer-phone" type="tel" placeholder="06 12 34 56 78"></div>' +
+        '</div>' +
+        '<div id="stripe-embedded-element" class="stripe-embedded-element"></div>' +
+        '<p id="stripe-embedded-error" class="stripe-embedded-error" aria-live="polite"></p>' +
+        '<div class="stripe-embedded-actions">' +
+          '<button id="stripe-embedded-cancel" class="add-btn">Retour</button>' +
+          '<button id="stripe-embedded-pay" class="btn-pay">Payer maintenant</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  const close = () => {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    shopPaymentConfirmHandler = null;
+    if (shopPaymentElements && typeof shopPaymentElements.getElement === 'function') {
+      const element = shopPaymentElements.getElement('payment');
+      if (element) element.unmount();
+    }
+    shopPaymentElements = null;
+    shopPaymentStripe = null;
+    document.body.style.overflow = '';
+    restoreFocus();
+  };
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) close();
+  });
+
+  modal.querySelector('#stripe-embedded-close')?.addEventListener('click', close);
+  modal.querySelector('#stripe-embedded-cancel')?.addEventListener('click', close);
+  modal.querySelector('#stripe-embedded-pay')?.addEventListener('click', async () => {
+    if (typeof shopPaymentConfirmHandler === 'function') {
+      await shopPaymentConfirmHandler();
+    }
+  });
+
+  return modal;
+}
+
+async function openEmbeddedStripePayment(options) {
+  const stripe = await getStripeClient();
+  if (!stripe) return { ok: false, reason: 'no-stripe-client' };
+
+  const modal = ensureShopPaymentDom();
+  const elementWrap = modal.querySelector('#stripe-embedded-element');
+  const errorEl = modal.querySelector('#stripe-embedded-error');
+  const orderEl = modal.querySelector('#stripe-embedded-order');
+  const payBtn = modal.querySelector('#stripe-embedded-pay');
+  const customerNameInput = modal.querySelector('#stripe-embedded-customer-name');
+  const customerEmailInput = modal.querySelector('#stripe-embedded-customer-email');
+  const customerPhoneInput = modal.querySelector('#stripe-embedded-customer-phone');
+
+  rememberFocus();
+  if (errorEl) errorEl.textContent = '';
+  if (orderEl) orderEl.textContent = options.orderRef ? ('Reference: ' + options.orderRef) : '';
+
+  if (customerNameInput && !customerNameInput.value) {
+    customerNameInput.value = localStorage.getItem('chiino_checkout_customer_name') || '';
+  }
+  if (customerEmailInput && !customerEmailInput.value) {
+    customerEmailInput.value = localStorage.getItem('chiino_checkout_customer_email') || '';
+  }
+  if (customerPhoneInput && !customerPhoneInput.value) {
+    customerPhoneInput.value = localStorage.getItem('chiino_checkout_customer_phone') || '';
+  }
+
+  shopPaymentStripe = stripe;
+  shopPaymentElements = stripe.elements({
+    clientSecret: options.clientSecret,
+    appearance: { theme: 'night' }
+  });
+
+  const paymentElement = shopPaymentElements.create('payment');
+  paymentElement.mount(elementWrap);
+
+  shopPaymentConfirmHandler = async () => {
+    if (!shopPaymentStripe || !shopPaymentElements) return;
+
+    const customerName = String(customerNameInput?.value || '').trim();
+    const customerEmail = String(customerEmailInput?.value || '').trim();
+    const customerPhone = String(customerPhoneInput?.value || '').trim();
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
+
+    if (!customerName || !emailOk) {
+      if (errorEl) errorEl.textContent = 'Merci de renseigner un nom complet et un email valide avant paiement.';
+      return;
+    }
+
+    localStorage.setItem('chiino_checkout_customer_name', customerName);
+    localStorage.setItem('chiino_checkout_customer_email', customerEmail);
+    localStorage.setItem('chiino_checkout_customer_phone', customerPhone);
+
+    if (payBtn) {
+      payBtn.disabled = true;
+      payBtn.textContent = 'Paiement en cours...';
+    }
+    if (errorEl) errorEl.textContent = '';
+
+    const { error, paymentIntent } = await shopPaymentStripe.confirmPayment({
+      elements: shopPaymentElements,
+      payment_method_data: {
+        billing_details: {
+          name: customerName,
+          email: customerEmail,
+          phone: customerPhone || undefined
+        }
+      },
+      confirmParams: {
+        return_url: window.location.origin + '/boutique.html?payment=return'
+      },
+      redirect: 'if_required'
+    });
+
+    if (payBtn) {
+      payBtn.disabled = false;
+      payBtn.textContent = 'Payer maintenant';
+    }
+
+    if (error) {
+      if (errorEl) errorEl.textContent = String(error.message || 'Paiement impossible, merci de réessayer.');
+      return;
+    }
+
+    const status = String(paymentIntent?.status || '').toLowerCase();
+    if (status === 'succeeded' || status === 'processing' || status === 'requires_capture') {
+      cart = [];
+      renderCart();
+      closeCart();
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      alert('Paiement validé. La commande est enregistrée et disponible dans le back-office.');
+      restoreFocus();
+      return;
+    }
+
+    if (errorEl) errorEl.textContent = 'Paiement non confirmé pour le moment. Vérifie le statut dans Stripe.';
+  };
+
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  modal.querySelector('#stripe-embedded-pay')?.focus();
   return { ok: true };
 }
 
@@ -2536,11 +2800,9 @@ function renderCart() {
         const optionText = item.optionValue
           ? (item.optionLabel || 'Option') + ': ' + item.optionValue + ' • '
           : '';
-        const supplierText = item.supplier ? ('Fournisseur: ' + item.supplier + ' • ') : '';
-        const shippingText = item.shipping ? ('Expedition: ' + item.shipping + ' • ') : '';
         const unitPriceText = formatPrice(item.price) + ' / unité';
         return '<div class="cart-item">' +
-          '<div><strong>' + (item.baseName || item.name) + '</strong><span>' + supplierText + shippingText + optionText + unitPriceText + '</span></div>' +
+          '<div><strong>' + (item.baseName || item.name) + '</strong><span>' + optionText + unitPriceText + '</span></div>' +
           '<div class="cart-line-actions">' +
             '<button data-action="minus" data-index="' + index + '">-</button>' +
             '<span>' + item.qty + '</span>' +
@@ -2605,8 +2867,6 @@ function openProductModal(productCard) {
   const badge = productCard.querySelector('.product-badge')?.textContent?.trim() || '';
   const priceText = productCard.querySelector('.price')?.textContent?.trim() || '';
   const oldPrice = productCard.querySelector('.price-old')?.textContent?.trim() || '';
-  const supplier = productCard.dataset.supplier || 'Partenaire';
-  const shipping = productCard.dataset.shipping || '5-10 jours ouvres';
   const optionLabel = productCard.dataset.optionLabel || '';
   const optionValues = (productCard.dataset.options || '')
     .split(',')
@@ -2630,9 +2890,6 @@ function openProductModal(productCard) {
       ? '<span class="price-old">' + oldPrice + '</span> <span class="price">' + priceText + '</span>'
       : '<span class="price">' + priceText + '</span>';
   }
-
-  if (productModalSupplier) productModalSupplier.textContent = 'Fournisseur: ' + supplier;
-  if (productModalShipping) productModalShipping.textContent = 'Expedition estimee: ' + shipping;
 
   if (productModalOptionWrap && productModalOptionLabel && productModalOption) {
     if (optionLabel && optionValues.length) {
@@ -2741,15 +2998,11 @@ if (productModalAdd) {
       : '';
     const optionValue = productModalOption && productModalOption.value ? productModalOption.value : '';
     const optionLabel = activeModalProduct.dataset.optionLabel || 'Option';
-    const supplier = activeModalProduct.dataset.supplier || 'Partenaire';
-    const shipping = activeModalProduct.dataset.shipping || '5-10 jours ouvres';
     const price = getDisplayedPrice(activeModalProduct);
 
     addToCart({
       sku: (activeModalProduct.dataset.sku || title) + optionSuffix,
       stripeSku: activeModalProduct.dataset.sku || title,
-      supplier,
-      shipping,
       baseName: title,
       name: title + optionSuffix,
       optionLabel,
@@ -2799,15 +3052,16 @@ if (checkoutBtn) {
         qty: item.qty
       }));
 
-      const supplierSummary = Array.from(new Set(cart.map((item) => String(item.supplier || '').trim()).filter(Boolean))).join(', ').slice(0, 240);
-      const shippingSummary = Array.from(new Set(cart.map((item) => String(item.shipping || '').trim()).filter(Boolean))).join(', ').slice(0, 240);
-
-      const result = await startStripeCheckout('/api/create-checkout-session', {
-        items: stripeItems,
-        supplierSummary,
-        shippingSummary
+      const result = await createStripePaymentIntent({
+        items: stripeItems
       });
-      if (result.ok) return;
+      if (result.ok) {
+        const openResult = await openEmbeddedStripePayment({
+          clientSecret: result.clientSecret,
+          orderRef: result.orderRef
+        });
+        if (openResult.ok) return;
+      }
     } catch (error) {
       // Fallback simulation below
     }

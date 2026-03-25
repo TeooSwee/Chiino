@@ -37,6 +37,8 @@ const dataDir = path.join(__dirname, 'data');
 const productsFile = path.join(dataDir, 'products.json');
 const realisationsFile = path.join(dataDir, 'realisations.json');
 const scheduleFile = path.join(dataDir, 'schedule.json');
+const ordersFile = path.join(dataDir, 'orders.json');
+const webhookEventsFile = path.join(dataDir, 'webhook-events.json');
 const legacyAdminDataFile = path.join(dataDir, 'admin-content.json');
 
 let scheduleBookingLock = false;
@@ -138,6 +140,89 @@ function writeAdminContent(content) {
     featuredRealisations: asArray(content.featuredRealisations),
     scheduleEntries: asArray(content.scheduleEntries)
   };
+}
+
+function readOrdersData() {
+  ensureDataDir();
+  const parsed = readJsonFileSafe(ordersFile, { orders: [] });
+  return { orders: asArray(parsed.orders) };
+}
+
+function writeOrdersData(data) {
+  ensureDataDir();
+  const payload = { orders: asArray(data?.orders) };
+  fs.writeFileSync(ordersFile, JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+function readWebhookEventsData() {
+  ensureDataDir();
+  const parsed = readJsonFileSafe(webhookEventsFile, { processedEventIds: [] });
+  return {
+    processedEventIds: asArray(parsed.processedEventIds)
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  };
+}
+
+function writeWebhookEventsData(data) {
+  ensureDataDir();
+  const uniqueIds = Array.from(new Set(
+    asArray(data?.processedEventIds)
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  ));
+  const payload = {
+    processedEventIds: uniqueIds.slice(-5000)
+  };
+  fs.writeFileSync(webhookEventsFile, JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+function normalizeOrderStatus(value) {
+  const key = String(value || '').trim().toLowerCase();
+  if (key === 'paid' || key === 'paye' || key === 'payee') return 'paid';
+  if (key === 'processing' || key === 'preparation') return 'processing';
+  if (key === 'fulfilled' || key === 'expediee' || key === 'expedie') return 'fulfilled';
+  if (key === 'delivered' || key === 'livree' || key === 'livre') return 'delivered';
+  if (key === 'refunded' || key === 'remboursee' || key === 'rembourse') return 'refunded';
+  if (key === 'canceled' || key === 'cancelled' || key === 'annulee' || key === 'annule') return 'canceled';
+  return 'paid';
+}
+
+function upsertShopOrderFromSession(session, metadata, itemsLabel) {
+  const store = readOrdersData();
+  const nowIso = new Date().toISOString();
+  const stripeSessionId = String(session.id || '').trim();
+  if (!stripeSessionId) return null;
+
+  const index = store.orders.findIndex((order) => String(order.stripeSessionId || '') === stripeSessionId);
+  const order = {
+    id: index >= 0 ? String(store.orders[index].id || ('ord-' + Date.now().toString(36))) : ('ord-' + Date.now().toString(36)),
+    orderRef: String(metadata.orderRef || '').trim() || ('CMD-' + Date.now().toString(36).toUpperCase()),
+    stripeSessionId,
+    status: normalizeOrderStatus(index >= 0 ? store.orders[index].status : 'paid'),
+    customerName: String(session.customer_details?.name || metadata.clientName || '').trim() || 'Non renseigne',
+    customerEmail: String(session.customer_details?.email || '').trim(),
+    amountTotal: Number(session.amount_total || 0),
+    currency: String(session.currency || 'eur').trim().toLowerCase(),
+    itemsLabel: String(itemsLabel || metadata.items || '').trim(),
+    suppliers: String(metadata.suppliers || '').trim(),
+    shippingSummary: String(metadata.shippingSummary || '').trim(),
+    trackingNumber: index >= 0 ? String(store.orders[index].trackingNumber || '').trim() : '',
+    adminNote: index >= 0 ? String(store.orders[index].adminNote || '').trim() : '',
+    createdAt: index >= 0 ? String(store.orders[index].createdAt || nowIso) : nowIso,
+    updatedAt: nowIso
+  };
+
+  if (index >= 0) {
+    store.orders[index] = { ...store.orders[index], ...order };
+  } else {
+    store.orders.push(order);
+  }
+
+  writeOrdersData(store);
+  return order;
 }
 
 function requireAdmin(req, res, next) {
@@ -397,11 +482,11 @@ async function sendOwnerNotification(subject, lines) {
 }
 
 const catalog = {
-  'FLASH-GEO-V3': { name: 'Flash Sheet - Geo Vol.3', amount: 2800, currency: 'eur' },
-  'SOIN-GEL-50': { name: 'Gel cicatrisant', amount: 2200, currency: 'eur' },
-  'FLASH-SERPENTS': { name: 'Flash Sheet - Serpents', amount: 1500, currency: 'eur' },
-  'NOTEBOOK-CHIINO': { name: 'Carnet de croquis - Chiino', amount: 1200, currency: 'eur' },
-  'TSHIRT-CHIINO': { name: 'T-shirt - Logo Chiino', amount: 3600, currency: 'eur' }
+  'FLASH-GEO-V3': { name: 'Crème réparatrice', amount: 2800, currency: 'eur', supplier: 'Printify', shipping: '5-7 jours ouvres' },
+  'SOIN-GEL-50': { name: 'Gel cicatrisant', amount: 2200, currency: 'eur', supplier: 'BigBuy', shipping: '3-5 jours ouvres' },
+  'FLASH-SERPENTS': { name: 'Flash Tattoo', amount: 1500, currency: 'eur', supplier: 'Printify', shipping: '5-7 jours ouvres' },
+  'NOTEBOOK-CHIINO': { name: 'Carnet de croquis - Chiino', amount: 1200, currency: 'eur', supplier: 'Printful', shipping: '4-7 jours ouvres' },
+  'TSHIRT-CHIINO': { name: 'T-shirt - Logo Chiino', amount: 3600, currency: 'eur', supplier: 'Printful', shipping: '5-10 jours ouvres' }
 };
 
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -418,53 +503,73 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
     return res.status(400).send(`Webhook error: ${err.message}`);
   }
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    console.log('[stripe] checkout.session.completed', session.id);
+  const webhookStore = readWebhookEventsData();
+  const eventId = String(event.id || '').trim();
+  if (eventId && webhookStore.processedEventIds.includes(eventId)) {
+    return res.json({ received: true, duplicate: true });
+  }
 
-    const metadata = session.metadata || {};
-    const orderType = String(metadata.orderType || '').trim();
-    const amountLabel = formatAmount(session.amount_total, session.currency);
-    const customerName = String(session.customer_details?.name || metadata.clientName || '').trim() || 'Non renseigné';
-    const customerEmail = String(session.customer_details?.email || '').trim() || 'Non renseigné';
+  try {
 
-    if (orderType === 'shop') {
-      let itemsLabel = String(metadata.items || '').trim();
-      if (!itemsLabel && stripe) {
-        try {
-          const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 20 });
-          itemsLabel = asArray(lineItems.data)
-            .map((item) => {
-              const qty = Number(item.quantity || 1);
-              const label = String(item.description || 'Produit').trim();
-              return `${label} x${qty}`;
-            })
-            .join(', ');
-        } catch (error) {
-          // Si Stripe refuse le détail des lignes, on envoie quand même la notification.
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      console.log('[stripe] checkout.session.completed', session.id);
+
+      const metadata = session.metadata || {};
+      const orderType = String(metadata.orderType || '').trim();
+      const amountLabel = formatAmount(session.amount_total, session.currency);
+      const customerName = String(session.customer_details?.name || metadata.clientName || '').trim() || 'Non renseigné';
+      const customerEmail = String(session.customer_details?.email || '').trim() || 'Non renseigné';
+
+      if (orderType === 'shop') {
+        let itemsLabel = String(metadata.items || '').trim();
+        if (!itemsLabel && stripe) {
+          try {
+            const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 20 });
+            itemsLabel = asArray(lineItems.data)
+              .map((item) => {
+                const qty = Number(item.quantity || 1);
+                const label = String(item.description || 'Produit').trim();
+                return `${label} x${qty}`;
+              })
+              .join(', ');
+          } catch (error) {
+            // Si Stripe refuse le détail des lignes, on envoie quand même la notification.
+          }
         }
+
+        upsertShopOrderFromSession(session, metadata, itemsLabel);
+
+        await sendOwnerNotification('Nouvel achat boutique', [
+          `Session: ${session.id}`,
+          `Montant: ${amountLabel}`,
+          `Client: ${customerName}`,
+          `Email Stripe: ${customerEmail}`,
+          `Produits: ${itemsLabel || 'Non disponible'}`,
+          `Fournisseurs: ${String(metadata.suppliers || '').trim() || 'Non disponible'}`,
+          `Delais expedition: ${String(metadata.shippingSummary || '').trim() || 'Non disponible'}`
+        ]);
       }
 
-      await sendOwnerNotification('Nouvel achat boutique', [
-        `Session: ${session.id}`,
-        `Montant: ${amountLabel}`,
-        `Client: ${customerName}`,
-        `Email Stripe: ${customerEmail}`,
-        `Produits: ${itemsLabel || 'Non disponible'}`
-      ]);
+      if (orderType === 'reservation_deposit') {
+        await sendOwnerNotification('Acompte réservation payé', [
+          `Session: ${session.id}`,
+          `Montant: ${amountLabel}`,
+          `Client: ${customerName}`,
+          `Téléphone: ${String(metadata.clientPhone || '').trim() || 'Non renseigné'}`,
+          `Jour: ${String(metadata.selectedDate || '').trim() || 'Non renseigné'}`,
+          `Moment: ${String(metadata.selectedPeriod || '').trim() || 'Non renseigné'}`,
+          `Réservation: ${String(metadata.reservationId || '').trim() || 'Non renseigné'}`
+        ]);
+      }
     }
 
-    if (orderType === 'reservation_deposit') {
-      await sendOwnerNotification('Acompte réservation payé', [
-        `Session: ${session.id}`,
-        `Montant: ${amountLabel}`,
-        `Client: ${customerName}`,
-        `Téléphone: ${String(metadata.clientPhone || '').trim() || 'Non renseigné'}`,
-        `Jour: ${String(metadata.selectedDate || '').trim() || 'Non renseigné'}`,
-        `Moment: ${String(metadata.selectedPeriod || '').trim() || 'Non renseigné'}`,
-        `Réservation: ${String(metadata.reservationId || '').trim() || 'Non renseigné'}`
-      ]);
+    if (eventId) {
+      webhookStore.processedEventIds.push(eventId);
+      writeWebhookEventsData(webhookStore);
     }
+  } catch (error) {
+    return res.status(500).send(`Webhook processing error: ${error.message || 'unknown-error'}`);
   }
 
   return res.json({ received: true });
@@ -555,6 +660,40 @@ app.get('/api/admin/content', requireAdmin, (_req, res) => {
   return res.json(readAdminContent());
 });
 
+app.get('/api/admin/orders', requireAdmin, (_req, res) => {
+  const data = readOrdersData();
+  const orders = data.orders
+    .slice()
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  return res.json({ orders });
+});
+
+app.put('/api/admin/orders/:id/status', requireAdmin, (req, res) => {
+  const id = String(req.params.id || '').trim();
+  const body = req.body || {};
+  const status = normalizeOrderStatus(body.status);
+  const trackingNumber = String(body.trackingNumber || '').trim();
+  const adminNote = String(body.adminNote || '').trim();
+
+  const data = readOrdersData();
+  const index = data.orders.findIndex((order) => String(order.id || '') === id);
+  if (index === -1) {
+    return res.status(404).json({ error: 'Commande introuvable' });
+  }
+
+  const previous = data.orders[index];
+  data.orders[index] = {
+    ...previous,
+    status,
+    trackingNumber,
+    adminNote,
+    updatedAt: new Date().toISOString()
+  };
+
+  writeOrdersData(data);
+  return res.json({ order: data.orders[index] });
+});
+
 app.post('/api/admin/products', requireAdmin, (req, res) => {
   const body = req.body || {};
   const name = String(body.name || '').trim();
@@ -567,7 +706,8 @@ app.post('/api/admin/products', requireAdmin, (req, res) => {
   const product = {
     id: 'prod-' + Date.now().toString(36),
     sku: String(body.sku || 'CUSTOM-' + Date.now().toString(36)),
-    supplier: String(body.supplier || 'Back-office'),
+    supplier: String(body.supplier || 'Partenaire'),
+    shipping: String(body.shipping || '5-10 jours ouvres'),
     name,
     shortDesc: String(body.shortDesc || '').trim(),
     details: String(body.details || name).trim(),
@@ -609,6 +749,8 @@ app.put('/api/admin/products/:id', requireAdmin, (req, res) => {
   const previous = content.customProducts[index];
   content.customProducts[index] = {
     ...previous,
+    supplier: String(body.supplier || previous.supplier || 'Partenaire'),
+    shipping: String(body.shipping || previous.shipping || '5-10 jours ouvres'),
     name,
     shortDesc: String(body.shortDesc || '').trim(),
     details: String(body.details || name).trim(),
@@ -692,6 +834,8 @@ app.put('/api/admin/default-products/:id', requireAdmin, (req, res) => {
 
   content.defaultProductOverrides[id] = {
     name: String(body.name || '').trim(),
+    supplier: String(body.supplier || '').trim(),
+    shipping: String(body.shipping || '').trim(),
     shortDesc: String(body.shortDesc || '').trim(),
     details: String(body.details || '').trim(),
     price: Number.isFinite(Number(body.price)) ? Number(body.price) : null,
@@ -842,6 +986,9 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
   const lineItems = [];
   const metadataItems = [];
+  const metadataSuppliers = [];
+  const metadataShipping = [];
+  const orderRef = 'CMD-' + Date.now().toString(36).toUpperCase();
 
   for (const item of items) {
     const sku = String(item.sku || '').trim();
@@ -862,7 +1009,16 @@ app.post('/api/create-checkout-session', async (req, res) => {
     });
 
     metadataItems.push(`${product.name} x${qty}`);
+    if (product.supplier) metadataSuppliers.push(product.supplier);
+    if (product.shipping) metadataShipping.push(product.shipping);
   }
+
+  const incomingSuppliers = String(req.body?.supplierSummary || '').trim();
+  const incomingShippingSummary = String(req.body?.shippingSummary || '').trim();
+  const computedSuppliers = Array.from(new Set(metadataSuppliers)).join(', ');
+  const computedShipping = Array.from(new Set(metadataShipping)).join(', ');
+  const metadataSuppliersLabel = (incomingSuppliers || computedSuppliers).slice(0, 500);
+  const metadataShippingLabel = (incomingShippingSummary || computedShipping).slice(0, 500);
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -871,7 +1027,10 @@ app.post('/api/create-checkout-session', async (req, res) => {
       line_items: lineItems,
       metadata: {
         orderType: 'shop',
-        items: metadataItems.join(', ').slice(0, 500)
+        orderRef,
+        items: metadataItems.join(', ').slice(0, 500),
+        suppliers: metadataSuppliersLabel,
+        shippingSummary: metadataShippingLabel
       },
       success_url: `${publicUrl}/boutique.html?checkout=success`,
       cancel_url: `${publicUrl}/boutique.html?checkout=cancel`

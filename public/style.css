@@ -405,6 +405,8 @@ nav > a:active{
 .product-modal-body h3{font-family:'Syne',sans-serif;font-size:28px;letter-spacing:-1px}
 .product-modal-desc{font-size:12px;color:var(--muted);line-height:1.9}
 .product-modal-price{font-family:'Syne',sans-serif;font-size:24px;color:var(--accent)}
+.product-modal-meta{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--border);border-radius:4px;background:rgba(13,31,60,0.3)}
+.product-modal-meta p{font-size:11px;color:var(--muted);line-height:1.6}
 .product-modal-option-wrap{display:flex;flex-direction:column;gap:6px}
 .product-modal-option-wrap label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
 .product-modal-option-wrap select{
@@ -690,7 +692,17 @@ nav > a:active{
 .admin-existing-row strong{font-size:11px;color:var(--paper)}
 .admin-existing-row span{font-size:10px;color:var(--paper);opacity:.85}
 .admin-existing-note{font-size:10px;color:var(--paper);opacity:.9;line-height:1.4}
-.admin-home-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.admin-order-row{border:1px solid var(--border);background:var(--bleu);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.admin-order-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.admin-order-top strong{font-size:12px;color:var(--paper)}
+.admin-order-top span{font-size:10px;color:var(--accent);letter-spacing:1px;text-transform:uppercase}
+.admin-order-line{font-size:10px;color:var(--muted);line-height:1.5}
+.admin-order-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.admin-order-controls select,
+.admin-order-controls input,
+.admin-order-row textarea{background:rgba(10,10,15,.55);border:1px solid var(--border);color:var(--paper);border-radius:4px;padding:8px 10px;font-size:11px;font-family:'Inter',sans-serif}
+.admin-order-row textarea{min-height:64px;resize:vertical}
+.admin-home-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .admin-home-btn{padding:16px 12px !important;font-size:12px}
 .admin-inline-actions{display:flex;gap:10px;flex-wrap:wrap}
 .admin-modal-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
@@ -721,6 +733,7 @@ nav > a:active{
   .admin-head-actions{width:100%}
   .admin-row{flex-direction:column;align-items:stretch}
   .admin-row-actions{width:100%;justify-content:flex-end;flex-wrap:wrap}
+  .admin-order-controls{grid-template-columns:1fr}
   .admin-week-head{align-items:flex-start;flex-direction:column}
   .admin-planner-stats{width:100%}
   .admin-week-nav{flex-wrap:wrap}

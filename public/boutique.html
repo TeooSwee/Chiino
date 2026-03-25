@@ -37,23 +37,23 @@
       <button class="filt" onclick="setFilt(this)">Vêtements</button>
     </div>
     <div class="shop-grid">
-      <div class="product" data-sku="FLASH-GEO-V3" data-supplier="Printify" data-price="28" data-category="modeles" data-details="Crème réparatrice enrichie en agents apaisants pour nourrir la peau tatouée et aider à maintenir son confort au quotidien." data-option-label="Format" data-options="250ml,500ml">
+      <div class="product" data-sku="FLASH-GEO-V3" data-supplier="Printify" data-shipping="5-7 jours ouvrés" data-price="28" data-category="modeles" data-details="Crème réparatrice enrichie en agents apaisants pour nourrir la peau tatouée et aider à maintenir son confort au quotidien." data-option-label="Format" data-options="250ml,500ml">
         <div class="product-img"><div class="product-badge">Nouveau</div><img src="Assets/pot.png" alt="Flash Sheet Geo Volume 3" loading="lazy" decoding="async"></div>
         <div class="product-info"><h3>Crème réparatrice</h3><p>Hydratation de votre peau. </p><div class="product-footer"><span class="price">28€</span><button class="add-btn add-cart">Voir l'article</button></div></div>
       </div>
-      <div class="product" data-sku="SOIN-GEL-50" data-supplier="BigBuy" data-price="22" data-category="soins" data-details="Gel cicatrisant à absorption rapide, conçu pour accompagner la phase de cicatrisation et protéger l'éclat du tatouage." data-option-label="Format" data-options="100ml,250ml">
+      <div class="product" data-sku="SOIN-GEL-50" data-supplier="BigBuy" data-shipping="3-5 jours ouvrés" data-price="22" data-category="soins" data-details="Gel cicatrisant à absorption rapide, conçu pour accompagner la phase de cicatrisation et protéger l'éclat du tatouage." data-option-label="Format" data-options="100ml,250ml">
         <div class="product-img"><div class="product-badge">Déstockage</div><img src="Assets/gel.png" alt="Gel cicatrisant Chiino" loading="lazy" decoding="async"></div>
         <div class="product-info"><h3>Gel cicatrisant</h3><p>Cicatrisation de votre tatouage</p><div class="product-footer"><span class="price">22€</span><button class="add-btn add-cart">Voir l'article</button></div></div>
       </div>
-      <div class="product" data-sku="FLASH-SERPENTS" data-supplier="Printify" data-price="15" data-category="modeles" data-details="Flash Tattoo regroupant une sélection de motifs prêts à tatouer, avec un style marqué pour inspirer ton prochain projet.">
+      <div class="product" data-sku="FLASH-SERPENTS" data-supplier="Printify" data-shipping="5-7 jours ouvrés" data-price="15" data-category="modeles" data-details="Flash Tattoo regroupant une sélection de motifs prêts à tatouer, avec un style marqué pour inspirer ton prochain projet.">
         <div class="product-img"><img src="Assets/flash.png" alt="Flash Tatoo" loading="lazy" decoding="async"></div>
         <div class="product-info"><h3>Flash Tattoo</h3><p>A5 couverture rigide, + 100 motifs</p><div class="product-footer"><span class="price">15€</span><button class="add-btn add-cart">Voir l'article</button></div></div>
       </div>
-      <div class="product" data-sku="NOTEBOOK-CHIINO" data-supplier="Printful" data-price="12" data-category="modeles" data-details="Carnet de croquis - Chiino idéal pour préparer des idées, esquisser des compositions et conserver ses références visuelles.">
+      <div class="product" data-sku="NOTEBOOK-CHIINO" data-supplier="Printful" data-shipping="4-7 jours ouvrés" data-price="12" data-category="modeles" data-details="Carnet de croquis - Chiino idéal pour préparer des idées, esquisser des compositions et conserver ses références visuelles.">
         <div class="product-img"><div class="product-badge">Nouveau</div><img src="Assets/croquis.png" alt="Carnet de croquis Chiino" loading="lazy" decoding="async"></div>
         <div class="product-info"><h3>Carnet de croquis - Chiino</h3><p>A5 couverture rigide, 40 pages</p><div class="product-footer"><span class="price">12€</span><button class="add-btn add-cart">Voir l'article</button></div></div>
       </div>
-      <div class="product" data-sku="TSHIRT-CHIINO" data-supplier="Printful" data-price="45" data-category="vetements" data-details="T-shirt - Logo Chiino en coton bio, coupe unisexe confortable, avec impression signature pour un look studio affirmé." data-option-label="Taille" data-options="S,M,L,XL">
+      <div class="product" data-sku="TSHIRT-CHIINO" data-supplier="Printful" data-shipping="5-10 jours ouvrés" data-price="45" data-category="vetements" data-details="T-shirt - Logo Chiino en coton bio, coupe unisexe confortable, avec impression signature pour un look studio affirmé." data-option-label="Taille" data-options="S,M,L,XL">
         <div class="product-img"><div class="product-badge">- 20 %</div><img src="Assets/t-shirt.png" alt="T-shirt logo Chiino" loading="lazy" decoding="async"></div>
         <div class="product-info"><h3>T-shirt - Logo Chiino</h3><p>Coton bio, noir, tailles S-XL</p><div class="product-footer"><span class="price-wrap"><span class="price-old">45€</span><span class="price">36€</span></span><button class="add-btn add-cart">Voir l'article</button></div></div>
       </div>
@@ -95,6 +95,10 @@
         <h3 id="product-modal-title"></h3>
         <p id="product-modal-desc" class="product-modal-desc"></p>
         <div class="product-modal-price" id="product-modal-price"></div>
+        <div class="product-modal-meta">
+          <p id="product-modal-supplier">Fournisseur: --</p>
+          <p id="product-modal-shipping">Expedition estimee: --</p>
+        </div>
         <div id="product-modal-option-wrap" class="product-modal-option-wrap">
           <label id="product-modal-option-label" for="product-modal-option"></label>
           <select id="product-modal-option"></select>

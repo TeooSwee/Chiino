@@ -87,6 +87,7 @@ let defaultRealisationOverridesState = {};
 let featuredProductsState = [];
 let featuredRealisationsState = [];
 let scheduleEntriesState = [];
+let ordersState = [];
 let adminPlannerWeekStartState = null;
 let editingProductId = null;
 let editingRealId = null;
@@ -97,6 +98,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'FLASH-GEO-V3',
     name: 'Crème réparatrice',
+    supplier: 'Printify',
+    shipping: '5-7 jours ouvres',
     shortDesc: 'Hydratation de votre peau.',
     details: 'Crème réparatrice enrichie en agents apaisants pour nourrir la peau tatouée et aider à maintenir son confort au quotidien.',
     price: 28,
@@ -110,6 +113,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'SOIN-GEL-50',
     name: 'Gel cicatrisant',
+    supplier: 'BigBuy',
+    shipping: '3-5 jours ouvres',
     shortDesc: 'Cicatrisation de votre tatouage',
     details: 'Gel cicatrisant à absorption rapide, conçu pour accompagner la phase de cicatrisation et protéger l\'éclat du tatouage.',
     price: 22,
@@ -123,6 +128,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'FLASH-SERPENTS',
     name: 'Flash Tattoo',
+    supplier: 'Printify',
+    shipping: '5-7 jours ouvres',
     shortDesc: 'A5 couverture rigide, + 100 motifs',
     details: 'Flash Tattoo regroupant une sélection de motifs prêts à tatouer, avec un style marqué pour inspirer ton prochain projet.',
     price: 15,
@@ -136,6 +143,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'NOTEBOOK-CHIINO',
     name: 'Carnet de croquis - Chiino',
+    supplier: 'Printful',
+    shipping: '4-7 jours ouvres',
     shortDesc: 'A5 couverture rigide, 40 pages',
     details: 'Carnet de croquis - Chiino idéal pour préparer des idées, esquisser des compositions et conserver ses références visuelles.',
     price: 12,
@@ -149,6 +158,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'TSHIRT-CHIINO',
     name: 'T-shirt - Logo Chiino',
+    supplier: 'Printful',
+    shipping: '5-10 jours ouvres',
     shortDesc: 'Coton bio, noir, tailles S-XL',
     details: 'T-shirt - Logo Chiino en coton bio, coupe unisexe confortable, avec impression signature pour un look studio affirmé.',
     price: 36,
@@ -324,6 +335,8 @@ function applyProductDataToCard(card, product) {
   if (!card || !product) return;
 
   card.dataset.category = normalizeProductCategory(product.category);
+  card.dataset.supplier = product.supplier || card.dataset.supplier || 'Partenaire';
+  card.dataset.shipping = product.shipping || card.dataset.shipping || '5-10 jours ouvres';
   card.dataset.details = product.details || product.name;
   card.dataset.price = String(product.price || 0);
   card.dataset.optionLabel = product.optionLabel || '';
@@ -521,7 +534,8 @@ function buildCustomProductCard(item) {
   card.className = 'product';
   card.dataset.customItem = '1';
   card.dataset.sku = item.sku;
-  card.dataset.supplier = item.supplier || 'Back-office';
+  card.dataset.supplier = item.supplier || 'Partenaire';
+  card.dataset.shipping = item.shipping || '5-10 jours ouvres';
   card.dataset.price = String(item.price);
   card.dataset.category = normalizeProductCategory(item.category);
   card.dataset.details = item.details || item.shortDesc || item.name;
@@ -745,6 +759,74 @@ function toLocalDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
+function getOrderStatusLabel(status) {
+  const key = String(status || '').toLowerCase().trim();
+  if (key === 'processing') return 'Preparation';
+  if (key === 'fulfilled') return 'Expediee';
+  if (key === 'delivered') return 'Livree';
+  if (key === 'refunded') return 'Remboursee';
+  if (key === 'canceled') return 'Annulee';
+  return 'Payee';
+}
+
+function getOrderStatusOptions(selected) {
+  const current = String(selected || 'paid').toLowerCase();
+  const options = [
+    { value: 'paid', label: 'Payee' },
+    { value: 'processing', label: 'Preparation' },
+    { value: 'fulfilled', label: 'Expediee' },
+    { value: 'delivered', label: 'Livree' },
+    { value: 'refunded', label: 'Remboursee' },
+    { value: 'canceled', label: 'Annulee' }
+  ];
+
+  return options.map((option) => {
+    const selectedAttr = option.value === current ? ' selected' : '';
+    return '<option value="' + option.value + '"' + selectedAttr + '>' + option.label + '</option>';
+  }).join('');
+}
+
+function renderAdminOrders() {
+  const list = document.getElementById('admin-orders-list');
+  if (!list) return;
+
+  if (!serverAdminAvailable) {
+    list.innerHTML = '<p style="font-size:11px;color:var(--muted)">Le suivi commandes est disponible quand le serveur API est accessible.</p>';
+    return;
+  }
+
+  const orders = Array.isArray(ordersState) ? ordersState : [];
+  if (!orders.length) {
+    list.innerHTML = '<p style="font-size:11px;color:var(--muted)">Aucune commande enregistrée pour le moment.</p>';
+    return;
+  }
+
+  list.innerHTML = orders.map((order) => {
+    const createdAt = order.createdAt
+      ? new Date(order.createdAt).toLocaleString('fr-FR')
+      : 'Date inconnue';
+    const amountText = Number.isFinite(Number(order.amountTotal))
+      ? (Number(order.amountTotal) / 100).toFixed(2).replace('.', ',') + ' ' + String(order.currency || 'EUR').toUpperCase()
+      : '0,00 EUR';
+
+    return '<div class="admin-order-row">' +
+      '<div class="admin-order-top">' +
+        '<strong>' + escapeHtml(order.orderRef || order.id || 'Commande') + '</strong>' +
+        '<span>' + escapeHtml(getOrderStatusLabel(order.status)) + '</span>' +
+      '</div>' +
+      '<p class="admin-order-line">' + escapeHtml(createdAt) + ' • ' + escapeHtml(amountText) + '</p>' +
+      '<p class="admin-order-line">Client: ' + escapeHtml(order.customerName || 'Non renseigne') + (order.customerEmail ? ' • ' + escapeHtml(order.customerEmail) : '') + '</p>' +
+      '<p class="admin-order-line">Produits: ' + escapeHtml(order.itemsLabel || 'Non disponible') + '</p>' +
+      '<div class="admin-order-controls">' +
+        '<select data-order-status="' + escapeHtml(order.id || '') + '">' + getOrderStatusOptions(order.status) + '</select>' +
+        '<input type="text" data-order-tracking="' + escapeHtml(order.id || '') + '" placeholder="Tracking" value="' + escapeHtml(order.trackingNumber || '') + '">' +
+      '</div>' +
+      '<textarea data-order-note="' + escapeHtml(order.id || '') + '" placeholder="Note interne">' + escapeHtml(order.adminNote || '') + '</textarea>' +
+      '<div class="admin-row-actions"><button class="add-btn" data-order-save="' + escapeHtml(order.id || '') + '">Enregistrer</button></div>' +
+    '</div>';
+  }).join('');
+}
+
 function renderAdminSchedulePlanner() {
   const planner = document.getElementById('admin-schedule-planner');
   if (!planner) return;
@@ -952,6 +1034,7 @@ function renderAdminLists() {
     }).join('');
   }
 
+  renderAdminOrders();
   renderAdminSchedulePlanner();
 
 }
@@ -966,9 +1049,11 @@ function initAdminBackoffice() {
   const passwordInput = document.getElementById('admin-password');
   const loginFeedback = document.getElementById('admin-login-feedback');
   const homeCard = document.getElementById('admin-home');
+  const moduleOrders = document.getElementById('admin-module-orders');
   const moduleProducts = document.getElementById('admin-module-products');
   const moduleReals = document.getElementById('admin-module-reals');
   const moduleSchedule = document.getElementById('admin-module-schedule');
+  const refreshOrdersBtn = document.getElementById('admin-refresh-orders');
   const productFormTitle = document.getElementById('admin-product-form-title');
   const realFormTitle = document.getElementById('admin-real-form-title');
   const cancelProductEditBtn = document.getElementById('admin-cancel-product-edit');
@@ -1228,12 +1313,34 @@ function initAdminBackoffice() {
     loginFeedback.classList.add(type === 'ok' ? 'ok' : 'err');
   };
 
+  const loadAdminOrders = async () => {
+    if (!serverAdminAvailable) {
+      ordersState = [];
+      renderAdminOrders();
+      return;
+    }
+
+    try {
+      const data = await adminApi('/api/admin/orders', 'GET');
+      ordersState = Array.isArray(data.orders) ? data.orders : [];
+      renderAdminOrders();
+    } catch (error) {
+      ordersState = [];
+      renderAdminOrders();
+      showAdminFeedback('Impossible de charger les commandes.', 'err');
+    }
+  };
+
   const showAdminModule = (target) => {
     const key = target || 'home';
     if (homeCard) homeCard.style.display = key === 'home' ? '' : 'none';
+    if (moduleOrders) moduleOrders.style.display = key === 'orders' ? '' : 'none';
     if (moduleProducts) moduleProducts.style.display = key === 'products' ? '' : 'none';
     if (moduleReals) moduleReals.style.display = key === 'reals' ? '' : 'none';
     if (moduleSchedule) moduleSchedule.style.display = key === 'schedule' ? '' : 'none';
+    if (key === 'orders') {
+      loadAdminOrders();
+    }
     if (key === 'schedule') {
       adminPlannerWeekStartState = null;
       renderAdminSchedulePlanner();
@@ -1244,12 +1351,17 @@ function initAdminBackoffice() {
     if (loginWrap) loginWrap.style.display = 'none';
     if (panel) panel.style.display = 'grid';
     await refreshContentState();
+    await loadAdminOrders();
     renderAdminLists();
     showAdminModule('home');
   };
 
   page.querySelectorAll('[data-admin-target]').forEach((btn) => {
     btn.addEventListener('click', () => showAdminModule(btn.dataset.adminTarget));
+  });
+
+  refreshOrdersBtn?.addEventListener('click', () => {
+    loadAdminOrders();
   });
 
   if (sessionStorage.getItem(ADMIN_SESSION_KEY) === 'ok') {
@@ -1331,7 +1443,8 @@ function initAdminBackoffice() {
     const productPayload = {
       id: editingProductId || ('prod-' + Date.now().toString(36)),
       sku: existingProduct?.sku || editingProductId || ('CUSTOM-' + Date.now().toString(36)),
-      supplier: 'Back-office',
+      supplier: existingProduct?.supplier || 'Partenaire',
+      shipping: existingProduct?.shipping || '5-10 jours ouvres',
       name,
       shortDesc,
       details: details || name,
@@ -1681,9 +1794,36 @@ function initAdminBackoffice() {
     const editDefaultRealId = event.target?.dataset?.editDefaultReal;
     const toggleDefaultProductId = event.target?.dataset?.toggleDefaultProduct;
     const toggleDefaultRealId = event.target?.dataset?.toggleDefaultReal;
+    const orderSaveId = event.target?.dataset?.orderSave;
     const scheduleDeleteId = event.target?.dataset?.scheduleDelete;
     const scheduleStatusId = event.target?.dataset?.scheduleStatus;
     const scheduleEditId = scheduleEditTarget?.dataset?.scheduleEdit;
+
+    if (orderSaveId) {
+      if (!serverAdminAvailable) {
+        showAdminFeedback('Le suivi commandes nécessite le serveur actif.', 'err');
+        return;
+      }
+
+      const statusInput = page.querySelector('[data-order-status="' + orderSaveId + '"]');
+      const trackingInput = page.querySelector('[data-order-tracking="' + orderSaveId + '"]');
+      const noteInput = page.querySelector('[data-order-note="' + orderSaveId + '"]');
+
+      const payload = {
+        status: statusInput?.value || 'paid',
+        trackingNumber: trackingInput?.value?.trim() || '',
+        adminNote: noteInput?.value?.trim() || ''
+      };
+
+      try {
+        await adminApi('/api/admin/orders/' + encodeURIComponent(orderSaveId) + '/status', 'PUT', payload);
+        await loadAdminOrders();
+        showAdminFeedback('Commande mise à jour.', 'ok');
+      } catch (error) {
+        showAdminFeedback('Mise à jour commande impossible côté serveur.', 'err');
+      }
+      return;
+    }
 
     if (editDefaultProductId) {
       const item = getMergedDefaultProduct(editDefaultProductId);
@@ -2072,6 +2212,8 @@ const productModalBadge = document.getElementById('product-modal-badge');
 const productModalTitle = document.getElementById('product-modal-title');
 const productModalDesc = document.getElementById('product-modal-desc');
 const productModalPrice = document.getElementById('product-modal-price');
+const productModalSupplier = document.getElementById('product-modal-supplier');
+const productModalShipping = document.getElementById('product-modal-shipping');
 const productModalOptionWrap = document.getElementById('product-modal-option-wrap');
 const productModalOptionLabel = document.getElementById('product-modal-option-label');
 const productModalOption = document.getElementById('product-modal-option');
@@ -2394,9 +2536,11 @@ function renderCart() {
         const optionText = item.optionValue
           ? (item.optionLabel || 'Option') + ': ' + item.optionValue + ' • '
           : '';
+        const supplierText = item.supplier ? ('Fournisseur: ' + item.supplier + ' • ') : '';
+        const shippingText = item.shipping ? ('Expedition: ' + item.shipping + ' • ') : '';
         const unitPriceText = formatPrice(item.price) + ' / unité';
         return '<div class="cart-item">' +
-          '<div><strong>' + (item.baseName || item.name) + '</strong><span>' + optionText + unitPriceText + '</span></div>' +
+          '<div><strong>' + (item.baseName || item.name) + '</strong><span>' + supplierText + shippingText + optionText + unitPriceText + '</span></div>' +
           '<div class="cart-line-actions">' +
             '<button data-action="minus" data-index="' + index + '">-</button>' +
             '<span>' + item.qty + '</span>' +
@@ -2461,6 +2605,8 @@ function openProductModal(productCard) {
   const badge = productCard.querySelector('.product-badge')?.textContent?.trim() || '';
   const priceText = productCard.querySelector('.price')?.textContent?.trim() || '';
   const oldPrice = productCard.querySelector('.price-old')?.textContent?.trim() || '';
+  const supplier = productCard.dataset.supplier || 'Partenaire';
+  const shipping = productCard.dataset.shipping || '5-10 jours ouvres';
   const optionLabel = productCard.dataset.optionLabel || '';
   const optionValues = (productCard.dataset.options || '')
     .split(',')
@@ -2484,6 +2630,9 @@ function openProductModal(productCard) {
       ? '<span class="price-old">' + oldPrice + '</span> <span class="price">' + priceText + '</span>'
       : '<span class="price">' + priceText + '</span>';
   }
+
+  if (productModalSupplier) productModalSupplier.textContent = 'Fournisseur: ' + supplier;
+  if (productModalShipping) productModalShipping.textContent = 'Expedition estimee: ' + shipping;
 
   if (productModalOptionWrap && productModalOptionLabel && productModalOption) {
     if (optionLabel && optionValues.length) {
@@ -2592,12 +2741,15 @@ if (productModalAdd) {
       : '';
     const optionValue = productModalOption && productModalOption.value ? productModalOption.value : '';
     const optionLabel = activeModalProduct.dataset.optionLabel || 'Option';
+    const supplier = activeModalProduct.dataset.supplier || 'Partenaire';
+    const shipping = activeModalProduct.dataset.shipping || '5-10 jours ouvres';
     const price = getDisplayedPrice(activeModalProduct);
 
     addToCart({
       sku: (activeModalProduct.dataset.sku || title) + optionSuffix,
       stripeSku: activeModalProduct.dataset.sku || title,
-      supplier: activeModalProduct.dataset.supplier || 'Fournisseur',
+      supplier,
+      shipping,
       baseName: title,
       name: title + optionSuffix,
       optionLabel,
@@ -2647,7 +2799,14 @@ if (checkoutBtn) {
         qty: item.qty
       }));
 
-      const result = await startStripeCheckout('/api/create-checkout-session', { items: stripeItems });
+      const supplierSummary = Array.from(new Set(cart.map((item) => String(item.supplier || '').trim()).filter(Boolean))).join(', ').slice(0, 240);
+      const shippingSummary = Array.from(new Set(cart.map((item) => String(item.shipping || '').trim()).filter(Boolean))).join(', ').slice(0, 240);
+
+      const result = await startStripeCheckout('/api/create-checkout-session', {
+        items: stripeItems,
+        supplierSummary,
+        shippingSummary
+      });
       if (result.ok) return;
     } catch (error) {
       // Fallback simulation below

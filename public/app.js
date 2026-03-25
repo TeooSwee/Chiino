@@ -2495,17 +2495,30 @@ function ensureShopPaymentDom() {
       '<div class="stripe-embedded-body">' +
         '<p id="stripe-embedded-note" class="stripe-embedded-note">Finalise ton paiement sans quitter la boutique.</p>' +
         '<p id="stripe-embedded-order" class="stripe-embedded-order"></p>' +
-        '<div class="stripe-embedded-customer">' +
-          '<div class="fg"><label for="stripe-embedded-customer-name">Nom complet</label><input id="stripe-embedded-customer-name" type="text" placeholder="Ex: Lea Martin"></div>' +
-          '<div class="fg"><label for="stripe-embedded-customer-email">Email</label><input id="stripe-embedded-customer-email" type="email" placeholder="exemple@email.com"></div>' +
-          '<div class="fg"><label for="stripe-embedded-customer-phone">Telephone (optionnel)</label><input id="stripe-embedded-customer-phone" type="tel" placeholder="06 12 34 56 78"></div>' +
+        '<div id="stripe-embedded-step-info" class="stripe-embedded-step">' +
+          '<div class="stripe-embedded-customer">' +
+            '<div class="fg"><label for="stripe-embedded-customer-first-name">Prenom</label><input id="stripe-embedded-customer-first-name" type="text" placeholder="Ex: Lea"></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-last-name">Nom</label><input id="stripe-embedded-customer-last-name" type="text" placeholder="Ex: Martin"></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-address">Adresse</label><input id="stripe-embedded-customer-address" type="text" placeholder="Ex: 12 rue des Fleurs"></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-postal">Code postal</label><input id="stripe-embedded-customer-postal" type="text" placeholder="Ex: 67000"></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-city">Ville</label><input id="stripe-embedded-customer-city" type="text" placeholder="Ex: Strasbourg"></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-country">Pays</label><select id="stripe-embedded-customer-country"><option value="" disabled selected>Choisir un pays</option><option value="FR">France</option><option value="BE">Belgique</option><option value="CH">Suisse</option><option value="LU">Luxembourg</option><option value="DE">Allemagne</option><option value="ES">Espagne</option><option value="IT">Italie</option><option value="CA">Canada</option><option value="US">Etats-Unis</option></select></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-email">Email</label><input id="stripe-embedded-customer-email" type="email" placeholder="exemple@email.com"></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-phone">Telephone (optionnel)</label><input id="stripe-embedded-customer-phone" type="tel" placeholder="06 12 34 56 78"></div>' +
+          '</div>' +
+          '<div class="stripe-embedded-actions">' +
+            '<button id="stripe-embedded-cancel-info" class="add-btn">Retour</button>' +
+            '<button id="stripe-embedded-next" class="btn-pay">Continuer</button>' +
+          '</div>' +
         '</div>' +
-        '<div id="stripe-embedded-element" class="stripe-embedded-element"></div>' +
+        '<div id="stripe-embedded-step-payment" class="stripe-embedded-step stripe-embedded-step-hidden">' +
+          '<div id="stripe-embedded-element" class="stripe-embedded-element"></div>' +
+          '<div class="stripe-embedded-actions">' +
+            '<button id="stripe-embedded-back-to-info" class="add-btn">Infos</button>' +
+            '<button id="stripe-embedded-pay" class="btn-pay">Payer maintenant</button>' +
+          '</div>' +
+        '</div>' +
         '<p id="stripe-embedded-error" class="stripe-embedded-error" aria-live="polite"></p>' +
-        '<div class="stripe-embedded-actions">' +
-          '<button id="stripe-embedded-cancel" class="add-btn">Retour</button>' +
-          '<button id="stripe-embedded-pay" class="btn-pay">Payer maintenant</button>' +
-        '</div>' +
       '</div>' +
     '</div>';
 
@@ -2530,7 +2543,7 @@ function ensureShopPaymentDom() {
   });
 
   modal.querySelector('#stripe-embedded-close')?.addEventListener('click', close);
-  modal.querySelector('#stripe-embedded-cancel')?.addEventListener('click', close);
+  modal.querySelector('#stripe-embedded-cancel-info')?.addEventListener('click', close);
   modal.querySelector('#stripe-embedded-pay')?.addEventListener('click', async () => {
     if (typeof shopPaymentConfirmHandler === 'function') {
       await shopPaymentConfirmHandler();
@@ -2549,7 +2562,16 @@ async function openEmbeddedStripePayment(options) {
   const errorEl = modal.querySelector('#stripe-embedded-error');
   const orderEl = modal.querySelector('#stripe-embedded-order');
   const payBtn = modal.querySelector('#stripe-embedded-pay');
-  const customerNameInput = modal.querySelector('#stripe-embedded-customer-name');
+  const nextBtn = modal.querySelector('#stripe-embedded-next');
+  const backToInfoBtn = modal.querySelector('#stripe-embedded-back-to-info');
+  const infoStep = modal.querySelector('#stripe-embedded-step-info');
+  const paymentStep = modal.querySelector('#stripe-embedded-step-payment');
+  const customerFirstNameInput = modal.querySelector('#stripe-embedded-customer-first-name');
+  const customerLastNameInput = modal.querySelector('#stripe-embedded-customer-last-name');
+  const customerAddressInput = modal.querySelector('#stripe-embedded-customer-address');
+  const customerPostalInput = modal.querySelector('#stripe-embedded-customer-postal');
+  const customerCityInput = modal.querySelector('#stripe-embedded-customer-city');
+  const customerCountryInput = modal.querySelector('#stripe-embedded-customer-country');
   const customerEmailInput = modal.querySelector('#stripe-embedded-customer-email');
   const customerPhoneInput = modal.querySelector('#stripe-embedded-customer-phone');
 
@@ -2557,14 +2579,34 @@ async function openEmbeddedStripePayment(options) {
   if (errorEl) errorEl.textContent = '';
   if (orderEl) orderEl.textContent = options.orderRef ? ('Reference: ' + options.orderRef) : '';
 
-  if (customerNameInput && !customerNameInput.value) {
-    customerNameInput.value = localStorage.getItem('chiino_checkout_customer_name') || '';
+  if (customerFirstNameInput && !customerFirstNameInput.value) {
+    customerFirstNameInput.value = localStorage.getItem('chiino_checkout_customer_first_name') || '';
+  }
+  if (customerLastNameInput && !customerLastNameInput.value) {
+    customerLastNameInput.value = localStorage.getItem('chiino_checkout_customer_last_name') || '';
+  }
+  if (customerAddressInput && !customerAddressInput.value) {
+    customerAddressInput.value = localStorage.getItem('chiino_checkout_customer_address') || '';
+  }
+  if (customerPostalInput && !customerPostalInput.value) {
+    customerPostalInput.value = localStorage.getItem('chiino_checkout_customer_postal') || '';
+  }
+  if (customerCityInput && !customerCityInput.value) {
+    customerCityInput.value = localStorage.getItem('chiino_checkout_customer_city') || '';
+  }
+  if (customerCountryInput && !customerCountryInput.value) {
+    customerCountryInput.value = localStorage.getItem('chiino_checkout_customer_country') || '';
   }
   if (customerEmailInput && !customerEmailInput.value) {
     customerEmailInput.value = localStorage.getItem('chiino_checkout_customer_email') || '';
   }
   if (customerPhoneInput && !customerPhoneInput.value) {
     customerPhoneInput.value = localStorage.getItem('chiino_checkout_customer_phone') || '';
+  }
+
+  if (infoStep && paymentStep) {
+    infoStep.classList.remove('stripe-embedded-step-hidden');
+    paymentStep.classList.add('stripe-embedded-step-hidden');
   }
 
   shopPaymentStripe = stripe;
@@ -2576,22 +2618,84 @@ async function openEmbeddedStripePayment(options) {
   const paymentElement = shopPaymentElements.create('payment');
   paymentElement.mount(elementWrap);
 
-  shopPaymentConfirmHandler = async () => {
-    if (!shopPaymentStripe || !shopPaymentElements) return;
-
-    const customerName = String(customerNameInput?.value || '').trim();
+  const getCustomerDetails = () => {
+    const customerFirstName = String(customerFirstNameInput?.value || '').trim();
+    const customerLastName = String(customerLastNameInput?.value || '').trim();
+    const customerAddress = String(customerAddressInput?.value || '').trim();
+    const customerPostal = String(customerPostalInput?.value || '').trim();
+    const customerCity = String(customerCityInput?.value || '').trim();
+    const customerCountry = String(customerCountryInput?.value || '').trim().toUpperCase();
     const customerEmail = String(customerEmailInput?.value || '').trim();
     const customerPhone = String(customerPhoneInput?.value || '').trim();
+    const customerName = [customerFirstName, customerLastName].filter(Boolean).join(' ').trim();
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
+    const postalOk = /^[A-Za-z0-9\s-]{3,12}$/.test(customerPostal);
+    const requiredMissing = !customerFirstName || !customerLastName || !customerAddress || !postalOk || !customerCity || !customerCountry || !emailOk;
 
-    if (!customerName || !emailOk) {
-      if (errorEl) errorEl.textContent = 'Merci de renseigner un nom complet et un email valide avant paiement.';
+    return {
+      customerFirstName,
+      customerLastName,
+      customerAddress,
+      customerPostal,
+      customerCity,
+      customerCountry,
+      customerEmail,
+      customerPhone,
+      customerName,
+      requiredMissing
+    };
+  };
+
+  nextBtn.onclick = () => {
+    const details = getCustomerDetails();
+
+    if (details.requiredMissing) {
+      if (errorEl) errorEl.textContent = 'Merci de renseigner prenom, nom, adresse, code postal, ville, pays et un email valide avant paiement.';
       return;
     }
 
-    localStorage.setItem('chiino_checkout_customer_name', customerName);
-    localStorage.setItem('chiino_checkout_customer_email', customerEmail);
-    localStorage.setItem('chiino_checkout_customer_phone', customerPhone);
+    localStorage.setItem('chiino_checkout_customer_first_name', details.customerFirstName);
+    localStorage.setItem('chiino_checkout_customer_last_name', details.customerLastName);
+    localStorage.setItem('chiino_checkout_customer_address', details.customerAddress);
+    localStorage.setItem('chiino_checkout_customer_postal', details.customerPostal);
+    localStorage.setItem('chiino_checkout_customer_city', details.customerCity);
+    localStorage.setItem('chiino_checkout_customer_country', details.customerCountry);
+    localStorage.setItem('chiino_checkout_customer_email', details.customerEmail);
+    localStorage.setItem('chiino_checkout_customer_phone', details.customerPhone);
+
+    if (errorEl) errorEl.textContent = '';
+    if (infoStep && paymentStep) {
+      infoStep.classList.add('stripe-embedded-step-hidden');
+      paymentStep.classList.remove('stripe-embedded-step-hidden');
+    }
+  };
+
+  backToInfoBtn.onclick = () => {
+    if (errorEl) errorEl.textContent = '';
+    if (infoStep && paymentStep) {
+      paymentStep.classList.add('stripe-embedded-step-hidden');
+      infoStep.classList.remove('stripe-embedded-step-hidden');
+    }
+  };
+
+  shopPaymentConfirmHandler = async () => {
+    if (!shopPaymentStripe || !shopPaymentElements) return;
+
+    const details = getCustomerDetails();
+
+    if (details.requiredMissing) {
+      if (errorEl) errorEl.textContent = 'Merci de renseigner prenom, nom, adresse, code postal, ville, pays et un email valide avant paiement.';
+      return;
+    }
+
+    localStorage.setItem('chiino_checkout_customer_first_name', details.customerFirstName);
+    localStorage.setItem('chiino_checkout_customer_last_name', details.customerLastName);
+    localStorage.setItem('chiino_checkout_customer_address', details.customerAddress);
+    localStorage.setItem('chiino_checkout_customer_postal', details.customerPostal);
+    localStorage.setItem('chiino_checkout_customer_city', details.customerCity);
+    localStorage.setItem('chiino_checkout_customer_country', details.customerCountry);
+    localStorage.setItem('chiino_checkout_customer_email', details.customerEmail);
+    localStorage.setItem('chiino_checkout_customer_phone', details.customerPhone);
 
     if (payBtn) {
       payBtn.disabled = true;
@@ -2603,9 +2707,15 @@ async function openEmbeddedStripePayment(options) {
       elements: shopPaymentElements,
       payment_method_data: {
         billing_details: {
-          name: customerName,
-          email: customerEmail,
-          phone: customerPhone || undefined
+          name: details.customerName,
+          email: details.customerEmail,
+          address: {
+            line1: details.customerAddress,
+            postal_code: details.customerPostal,
+            city: details.customerCity,
+            country: details.customerCountry
+          },
+          phone: details.customerPhone || undefined
         }
       },
       confirmParams: {

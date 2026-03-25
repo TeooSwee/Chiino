@@ -678,7 +678,7 @@ async function dispatchOrderToSupplierById(orderId) {
   return { ok: Boolean(result.ok), order: updated, error: result.ok ? '' : 'dispatch-failed' };
 }
 
-app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/api/:webhookPath(webhook|stripe-webhook)', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripe || !webhookSecret) {
     return res.status(400).send('Stripe webhook not configured');
   }
@@ -1260,7 +1260,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'paypal'],
       line_items: lineItems,
       metadata: {
         orderType: 'shop',
@@ -1328,7 +1328,7 @@ app.post('/api/create-payment-intent', async (req, res) => {
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: 'eur',
-      automatic_payment_methods: { enabled: true },
+      payment_method_types: ['card', 'paypal'],
       metadata: {
         orderType: 'shop',
         orderRef,
@@ -1432,7 +1432,7 @@ app.post('/api/create-deposit-session', async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'paypal'],
       line_items: [
         {
           quantity: 1,

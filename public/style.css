@@ -510,10 +510,23 @@ nav > a:active{
 .stripe-embedded-body{padding:16px 18px}
 .stripe-embedded-note{font-size:11px;color:var(--muted);margin-bottom:8px}
 .stripe-embedded-order{font-size:11px;color:var(--paper);margin-bottom:10px}
-.stripe-embedded-customer{display:grid;gap:8px;margin-bottom:10px}
+.stripe-embedded-step{display:block}
+.stripe-embedded-step-hidden{display:none}
+.stripe-embedded-customer{display:grid;gap:8px;margin-bottom:10px;grid-template-columns:1fr 1fr}
+.stripe-embedded-customer .fg:nth-child(3),
+.stripe-embedded-customer .fg:nth-child(8){grid-column:1 / -1}
 .stripe-embedded-customer .fg{gap:4px}
 .stripe-embedded-customer .fg label{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
 .stripe-embedded-customer .fg input{
+  background:rgba(13,31,60,.4);
+  border:1px solid var(--border);
+  color:var(--paper);
+  padding:10px 12px;
+  border-radius:4px;
+  font-size:12px;
+  font-family:'Inter',sans-serif;
+}
+.stripe-embedded-customer .fg select{
   background:rgba(13,31,60,.4);
   border:1px solid var(--border);
   color:var(--paper);

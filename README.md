@@ -53,6 +53,46 @@ SUPPLIER_DISPATCH_URL_TAT_EU=
 fly deploy
 ```
 
+## Synchroniser les donnees local <-> Fly
+
+Les fichiers de `data/` sont ignores par git et, en production, ils vivent sur le volume Fly monte sur `/app/data`.
+Un `fly deploy` met a jour le code, mais pas automatiquement ces donnees.
+
+### 1) Sauvegarder la prod avant toute synchro
+
+```bash
+npm run data:fly:backup
+```
+
+Les backups sont ecrits dans `backup/fly-data-YYYYMMDD-HHMMSS`.
+
+### 2) Envoyer les donnees locales vers la prod
+
+```bash
+npm run data:fly:sync
+```
+
+Cela envoie (si presents en local):
+- `data/products.json`
+- `data/realisations.json`
+- `data/schedule.json`
+- `data/orders.json`
+- `data/webhook-events.json`
+
+### 3) Verifier en production
+
+1. Ouvrir le site prod et faire un hard refresh (`Cmd+Shift+R`).
+2. Se connecter au back-office prod et verifier produits/planning/commandes.
+
+### Utilisation avancee
+
+Tu peux cibler une autre app Fly ou un autre dossier local:
+
+```bash
+./scripts/backup-data-from-fly.sh <app-name> <dossier-sortie>
+./scripts/sync-data-to-fly.sh <app-name> <dossier-local-data>
+```
+
 ## Structure du projet
 
 ```

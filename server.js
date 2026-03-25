@@ -679,8 +679,10 @@ async function dispatchOrderToSupplierById(orderId) {
 }
 
 app.post('/api/:webhookPath(webhook|stripe-webhook)', express.raw({ type: 'application/json' }), async (req, res) => {
+  console.log('[stripe-webhook] Reçu webhook Stripe:', req.method, req.originalUrl);
   if (!stripe || !webhookSecret) {
-    return res.status(400).send('Stripe webhook not configured');
+    console.error('[stripe-webhook] Stripe ou webhookSecret non configuré');
+    return res.status(400).send('Stripe webhook not configuré');
   }
 
   const signature = req.headers['stripe-signature'];
@@ -688,17 +690,21 @@ app.post('/api/:webhookPath(webhook|stripe-webhook)', express.raw({ type: 'appli
 
   try {
     event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
+    console.log('[stripe-webhook] Event Stripe reçu:', event.type, event.id);
   } catch (err) {
+    console.error('[stripe-webhook] Erreur de vérification Stripe:', err.message);
     return res.status(400).send(`Webhook error: ${err.message}`);
   }
 
   const webhookStore = readWebhookEventsData();
   const eventId = String(event.id || '').trim();
   if (eventId && webhookStore.processedEventIds.includes(eventId)) {
+    console.warn('[stripe-webhook] Event déjà traité:', eventId);
     return res.json({ received: true, duplicate: true });
   }
 
   try {
+    console.log('[stripe-webhook] Traitement event:', event.type);
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
@@ -762,9 +768,23 @@ app.post('/api/:webhookPath(webhook|stripe-webhook)', express.raw({ type: 'appli
 
       if (orderType === 'shop') {
         const charge = Array.isArray(paymentIntent.charges?.data) ? paymentIntent.charges.data[0] : null;
-        const billing = charge?.billing_details || {};
-        const customerName = String(billing.name || metadata.clientName || '').trim() || 'Non renseigné';
-        const customerEmail = String(billing.email || '').trim() || 'Non renseigné';
+        console.log('[stripe-webhook][debug] paymentIntent:', JSON.stringify(paymentIntent, null, 2));
+        console.log('[stripe-webhook][debug] charge:', JSON.stringify(charge, null, 2));
+        // Correction : récupération robuste du nom et email client
+        const customerName = String(
+          paymentIntent.metadata?.clientName ||
+          paymentIntent.shipping?.name ||
+          paymentIntent.billing_details?.name ||
+          (charge?.billing_details?.name) ||
+          ''
+        ).trim() || 'Non renseigné';
+        const customerEmail = String(
+          paymentIntent.metadata?.clientEmail ||
+          paymentIntent.shipping?.email ||
+          paymentIntent.billing_details?.email ||
+          (charge?.billing_details?.email) ||
+          ''
+        ).trim() || 'Non renseigné';
         const amountLabel = formatAmount(paymentIntent.amount, paymentIntent.currency);
         const itemsLabel = String(metadata.items || '').trim();
 
@@ -789,9 +809,11 @@ app.post('/api/:webhookPath(webhook|stripe-webhook)', express.raw({ type: 'appli
       writeWebhookEventsData(webhookStore);
     }
   } catch (error) {
+    console.error('[stripe-webhook] Erreur lors du traitement du webhook:', error.message);
     return res.status(500).send(`Webhook processing error: ${error.message || 'unknown-error'}`);
   }
 
+  console.log('[stripe-webhook] Webhook traité avec succès.');
   return res.json({ received: true });
 });
 

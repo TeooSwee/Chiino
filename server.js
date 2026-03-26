@@ -215,7 +215,7 @@ function upsertShopOrderFromSession(session, metadata, itemsLabel) {
     customerFirstName: String(metadata.clientFirstName || '').trim(),
     customerAddress: String(metadata.clientAddress || '').trim(),
     customerPhone: String(metadata.clientPhone || '').trim(),
-    customerEmail: String(session.customer_details?.email || '').trim(),
+    customerEmail: String(session.customer_details?.email || metadata.clientEmail || '').trim(),
     amountTotal: Number(session.amount_total || 0),
     currency: String(session.currency || 'eur').trim().toLowerCase(),
     itemsLabel: String(itemsLabel || metadata.items || '').trim(),

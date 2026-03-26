@@ -1311,7 +1311,12 @@ app.post('/api/create-checkout-session', async (req, res) => {
         items: metadataItems.join(', ').slice(0, 500),
         skuLines: metadataSkuLines.join('|').slice(0, 500),
         suppliers: metadataSuppliersLabel,
-        shippingSummary: metadataShippingLabel
+        shippingSummary: metadataShippingLabel,
+        clientName: String(req.body.clientName || '').slice(0, 100),
+        clientFirstName: String(req.body.clientFirstName || '').slice(0, 100),
+        clientAddress: String(req.body.clientAddress || '').slice(0, 300),
+        clientPhone: String(req.body.clientPhone || '').slice(0, 40),
+        clientEmail: String(req.body.clientEmail || '').slice(0, 100)
       },
       success_url: `${publicUrl}/boutique.html?checkout=success`,
       cancel_url: `${publicUrl}/boutique.html?checkout=cancel`

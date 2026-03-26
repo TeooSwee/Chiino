@@ -854,6 +854,9 @@ function renderAdminOrders() {
       '</div>' +
       '<p class="admin-order-line">' + escapeHtml(createdAt) + ' • ' + escapeHtml(amountText) + '</p>' +
       '<p class="admin-order-line">Client: ' + escapeHtml(order.customerName || 'Non renseigne') + (order.customerEmail ? ' • ' + escapeHtml(order.customerEmail) : '') + '</p>' +
+      (order.customerFirstName ? '<p class="admin-order-line">Prénom: ' + escapeHtml(order.customerFirstName) + '</p>' : '') +
+      (order.customerAddress ? '<p class="admin-order-line">Adresse: ' + escapeHtml(order.customerAddress) + '</p>' : '') +
+      (order.customerPhone ? '<p class="admin-order-line">Téléphone: ' + escapeHtml(order.customerPhone) + '</p>' : '') +
       '<p class="admin-order-line">Produits: ' + escapeHtml(order.itemsLabel || 'Non disponible') + '</p>' +
       '<p class="admin-order-line">Fournisseur: ' + escapeHtml(order.supplierProvider || 'Auto') + ' • ' + escapeHtml(getDispatchStatusLabel(order.dispatchStatus)) + (order.supplierOrderId ? (' • Ref: ' + escapeHtml(order.supplierOrderId)) : '') + '</p>' +
       (!canShipOrder ? '<p class="admin-order-line">Info: envoi manuel TAT-EU requis avant statut Expediee/Livree.</p>' : '') +
@@ -2241,29 +2244,7 @@ if (lightbox) {
   });
 }
 
-document.addEventListener('keydown', (event) => {
-  const stripePreview = document.getElementById('stripe-preview');
-  const stripeEmbedded = document.getElementById('stripe-embedded-payment');
-  if (event.key === 'Escape' && stripePreview && stripePreview.classList.contains('open')) {
-    stripePreview.querySelector('#stripe-preview-close')?.click();
-    return;
-  }
-  if (event.key === 'Escape' && stripeEmbedded && stripeEmbedded.classList.contains('open')) {
-    stripeEmbedded.querySelector('#stripe-embedded-close')?.click();
-    return;
-  }
-  if (event.key === 'Escape' && reservationSlotModal && reservationSlotModal.classList.contains('open')) {
-    closeReservationSlotModal();
-    return;
-  }
-  if (event.key === 'Escape' && productModal && productModal.classList.contains('open')) {
-    closeProductModal();
-    return;
-  }
-  if (event.key === 'Escape' && lightbox && lightbox.classList.contains('open')) {
-    closeLightbox();
-  }
-});
+
 
 const CART_KEY = 'chiino_cart_v1';
 const floatingCartBtn = document.getElementById('floating-cart');
@@ -2313,8 +2294,7 @@ const reservationSlotSelectedLabel = document.getElementById('reservation-slot-s
 let cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
 // Correction Stripe : rendre stripeItems global pour le paiement
 let stripeItems = [];
-let stripeClientPromise = null;
-let stripePreviewConfirmAction = null;
+let stripeClientPromise = undefined;
 let shopPaymentElements = null;
 let shopPaymentStripe = null;
 let shopPaymentConfirmHandler = null;
@@ -2322,114 +2302,44 @@ let reservationPickerWeekStart = null;
 let reservationSelectedSlot = null;
 let reservationDraftSlot = null;
 let reservationOccupiedSlots = new Set();
-
-function getMinReservationDateKey() {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + 2);
-  return toLocalDateKey(date);
-}
-
-function formatAmount(value) {
-  return Number(value || 0).toFixed(2).replace('.', ',') + '€';
-}
-
-function ensureStripePreviewDom() {
-  let modal = document.getElementById('stripe-preview');
-  if (modal) return modal;
-
-  modal = document.createElement('div');
-  modal.id = 'stripe-preview';
-  modal.className = 'stripe-preview';
-  modal.setAttribute('aria-hidden', 'true');
-  modal.setAttribute('role', 'dialog');
-  modal.setAttribute('aria-modal', 'true');
-  modal.setAttribute('aria-label', 'Aperçu paiement Stripe');
-  modal.setAttribute('tabindex', '-1');
-  modal.innerHTML =
-    '<div class="stripe-preview-card">' +
-      '<div class="stripe-preview-head">' +
-        '<strong>Aperçu paiement Stripe</strong>' +
-        '<button id="stripe-preview-close" class="stripe-preview-close" aria-label="Fermer">x</button>' +
-      '</div>' +
-      '<div class="stripe-preview-body">' +
-        '<p class="stripe-preview-note" id="stripe-preview-note"></p>' +
-        '<div class="stripe-preview-lines" id="stripe-preview-lines"></div>' +
-        '<div class="stripe-preview-total"><span>Total</span><span id="stripe-preview-total"></span></div>' +
-        '<div class="stripe-preview-fields">' +
-          '<input type="text" value="4242 4242 4242 4242" readonly>' +
-          '<input type="text" value="12 / 34   CVC 123" readonly>' +
-        '</div>' +
-        '<div class="stripe-preview-actions">' +
-          '<button id="stripe-preview-cancel" class="add-btn">Retour</button>' +
-          '<button id="stripe-preview-pay" class="btn-pay">Payer en simulation</button>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-
-  document.body.appendChild(modal);
-
-  const close = () => {
-    modal.classList.remove('open');
-    modal.setAttribute('aria-hidden', 'true');
-    stripePreviewConfirmAction = null;
-    document.body.style.overflow = '';
-    restoreFocus();
-  };
-
-  modal.addEventListener('click', (event) => {
-    if (event.target === modal) close();
-  });
-
-  modal.querySelector('#stripe-preview-close')?.addEventListener('click', close);
-  modal.querySelector('#stripe-preview-cancel')?.addEventListener('click', close);
-  modal.querySelector('#stripe-preview-pay')?.addEventListener('click', () => {
-    if (typeof stripePreviewConfirmAction === 'function') stripePreviewConfirmAction();
-    close();
-  });
-
-  return modal;
-}
-
-function openStripePreview(options) {
-  const modal = ensureStripePreviewDom();
-  rememberFocus();
-  const noteEl = modal.querySelector('#stripe-preview-note');
-  const linesEl = modal.querySelector('#stripe-preview-lines');
-  const totalEl = modal.querySelector('#stripe-preview-total');
-  const payBtn = modal.querySelector('#stripe-preview-pay');
-
-  if (noteEl) noteEl.textContent = options.note || 'Aperçu visuel du checkout (mode sans clés Stripe).';
-  if (linesEl) {
-    linesEl.innerHTML = (options.lines || [])
-      .map((line) => '<div class="stripe-preview-line"><span>' + line.label + '</span><span>' + line.value + '</span></div>')
-      .join('');
+document.addEventListener('keydown', (event) => {
+  const stripeEmbedded = document.getElementById('stripe-embedded-payment');
+  if (event.key === 'Escape' && stripeEmbedded && stripeEmbedded.classList.contains('open')) {
+    stripeEmbedded.querySelector('#stripe-embedded-close')?.click();
+    return;
   }
-  if (totalEl) totalEl.textContent = options.total || '0,00€';
-  if (payBtn) payBtn.textContent = options.confirmLabel || 'Payer en simulation';
+  if (event.key === 'Escape' && reservationSlotModal && reservationSlotModal.classList.contains('open')) {
+    closeReservationSlotModal();
+    return;
+  }
+  if (event.key === 'Escape' && productModal && productModal.classList.contains('open')) {
+    closeProductModal();
+    return;
+  }
+  if (event.key === 'Escape' && lightbox && lightbox.classList.contains('open')) {
+    closeLightbox();
+  }
+});
 
-  stripePreviewConfirmAction = options.onConfirm || null;
-  modal.classList.add('open');
-  modal.setAttribute('aria-hidden', 'false');
-  document.body.style.overflow = 'hidden';
-  modal.querySelector('#stripe-preview-close')?.focus();
-}
 
+// Nouvelle version simple de getStripeClient
 async function getStripeClient() {
   if (stripeClientPromise) return stripeClientPromise;
-
-  stripeClientPromise = (async () => {
-    if (typeof window.Stripe !== 'function') return null;
-
-    const response = await fetch('/api/public-config');
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    if (!data.publishableKey) return null;
-
-    return window.Stripe(data.publishableKey);
-  })();
-
+  // Charge Stripe.js si ce n'est pas déjà fait
+  if (!window.Stripe) {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://js.stripe.com/v3/';
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+  // Récupère la clé publique Stripe depuis le backend
+  const response = await fetch('/api/stripe-publishable-key');
+  const data = await response.json();
+  if (!data.publishableKey) return null;
+  stripeClientPromise = window.Stripe(data.publishableKey);
   return stripeClientPromise;
 }
 
@@ -2711,6 +2621,9 @@ async function openEmbeddedStripePayment(options) {
     const result = await createStripePaymentIntent({
       items: stripeItems,
       clientName: details.customerName,
+      clientFirstName: details.customerFirstName,
+      clientAddress: [details.customerAddress, details.customerPostal, details.customerCity, details.customerCountry].filter(Boolean).join(', '),
+      clientPhone: details.customerPhone,
       clientEmail: details.customerEmail
     });
 
@@ -3188,26 +3101,15 @@ if (checkoutBtn) {
           orderRef: result.orderRef
         });
         if (openResult.ok) return;
+        // Si Stripe échoue, afficher une erreur bloquante
+        alert('Erreur lors du paiement Stripe. Merci de réessayer plus tard.');
+        return;
       }
+      // Si Stripe refuse la création de paiement
+      alert('Erreur lors de la création du paiement Stripe. Merci de réessayer plus tard.');
     } catch (error) {
-      // Fallback simulation below
+      alert('Erreur lors de la communication avec Stripe. Merci de réessayer plus tard.');
     }
-
-    openStripePreview({
-      note: 'Stripe n\'est pas configuré sur ce poste. Voici un aperçu de checkout.',
-      lines: cart.map((item) => ({
-        label: item.name + ' x' + item.qty,
-        value: formatAmount(item.price * item.qty)
-      })),
-      total: formatAmount(getCartTotal()),
-      confirmLabel: 'Valider la commande (simulation)',
-      onConfirm: () => {
-        cart = [];
-        renderCart();
-        closeCart();
-        alert('Commande simulée validée. Aucun paiement réel n\'a été effectué.');
-      }
-    });
   });
 }
 
@@ -3300,44 +3202,11 @@ if (depositBtn) {
       }
 
       if (result.ok) return;
+      // Si Stripe refuse la création de paiement
+      showDepositFeedback('Erreur lors de la création du paiement Stripe. Merci de réessayer plus tard.', 'err');
     } catch (error) {
-      // Fallback simulation below
+      showDepositFeedback('Erreur lors de la communication avec Stripe. Merci de réessayer plus tard.', 'err');
     }
-
-    openStripePreview({
-      note: 'Stripe n\'est pas configuré sur ce poste. Voici un aperçu de checkout pour l\'acompte.',
-      lines: [
-        { label: 'Acompte réservation tatouage', value: '50,00€' },
-        { label: 'Client', value: prenom + ' ' + nom }
-      ],
-      total: '50,00€',
-      confirmLabel: 'Confirmer l\'acompte (simulation)',
-      onConfirm: () => {
-        const STORAGE_KEY = 'chiino_deposit_simulations_v1';
-        const simulations = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        const reference = 'DEP-' + Date.now().toString().slice(-8);
-
-        simulations.push({
-          reference,
-          createdAt: new Date().toISOString(),
-          amount: 50,
-          status: 'acompte-simule',
-          client: { prenom, nom, telephone },
-          projet: {
-            style,
-            zone,
-            description,
-            disponibilites,
-            selectedDate,
-            selectedPeriod,
-            images: imageFiles.map((file) => String(file.name || 'image'))
-          }
-        });
-
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(simulations));
-        showDepositFeedback('Acompte simulé confirmé. Référence : ' + reference + '. Aucun paiement réel n\'a été effectué.', 'ok');
-      }
-    });
   });
 }
 

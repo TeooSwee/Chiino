@@ -2703,6 +2703,18 @@ async function openEmbeddedStripePayment(options) {
     }
     if (errorEl) errorEl.textContent = '';
 
+    // On transmet le nom et l'email dans le PaymentIntent (metadata)
+    const result = await createStripePaymentIntent({
+      items: stripeItems,
+      clientName: details.customerName,
+      clientEmail: details.customerEmail
+    });
+
+    if (!result.ok) {
+      if (errorEl) errorEl.textContent = 'Erreur lors de la création du paiement.';
+      return;
+    }
+
     const { error, paymentIntent } = await shopPaymentStripe.confirmPayment({
       elements: shopPaymentElements,
       payment_method_data: {

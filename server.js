@@ -801,6 +801,21 @@ app.post('/api/:webhookPath(webhook|stripe-webhook)', express.raw({ type: 'appli
           `Delais expedition: ${String(metadata.shippingSummary || '').trim() || 'Non disponible'}`,
           'Action requise: envoi manuel vers TAT-EU depuis le back-office.'
         ]);
+
+        // Envoi d'un email de confirmation au client
+        try {
+          const { sendMail } = require('./scripts/sendMail');
+          if (customerEmail && customerEmail !== 'Non renseigné') {
+            await sendMail({
+              to: customerEmail,
+              subject: `Confirmation de votre commande ${order?.orderRef || ''}`,
+              text: `Bonjour ${customerName},\n\nNous avons bien reçu votre commande sur Chiino.\n\nMontant : ${amountLabel}\nProduits : ${itemsLabel || 'Non disponible'}\n\nMerci pour votre confiance !\n\nL'équipe Chiino`,
+              html: `<p>Bonjour ${customerName},</p><p>Nous avons bien reçu votre commande sur <b>Chiino</b>.</p><ul><li><b>Montant :</b> ${amountLabel}</li><li><b>Produits :</b> ${itemsLabel || 'Non disponible'}</li></ul><p>Merci pour votre confiance !<br>L'équipe Chiino</p>`
+            });
+          }
+        } catch (err) {
+          console.error('[mail] Erreur envoi confirmation client :', err.message);
+        }
       }
     }
 
@@ -1357,7 +1372,9 @@ app.post('/api/create-payment-intent', async (req, res) => {
         items: metadataItems.join(', ').slice(0, 500),
         skuLines: metadataSkuLines.join('|').slice(0, 500),
         suppliers: metadataSuppliersLabel,
-        shippingSummary: metadataShippingLabel
+        shippingSummary: metadataShippingLabel,
+        clientName: String(req.body.clientName || '').slice(0, 100),
+        clientEmail: String(req.body.clientEmail || '').slice(0, 100)
       }
     });
 

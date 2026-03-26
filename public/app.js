@@ -611,7 +611,7 @@ function buildCustomProductCard(item) {
   } else {
     const price = document.createElement('span');
     price.className = 'price';
-    price.textContent = Number(item.price).toFixed(2).replace('.', ',') + '€';
+    price.textContent = Number(item.price || 0).toFixed(2).replace('.', ',') + '€';
     footer.appendChild(price);
   }
 
@@ -3179,15 +3179,14 @@ if (checkoutBtn) {
         qty: item.qty
       }));
 
-      const result = await createStripePaymentIntent({
-        // Récupère les infos client comme dans le paiement classique
-        const details = getCustomerDetails ? getCustomerDetails() : {};
-        const payload = {
-          items: stripeItems,
-          clientName: details.customerName || '',
-          clientEmail: details.customerEmail || ''
-        };
-        const result = await createStripePaymentIntent(payload);
+      // Récupère les infos client comme dans le paiement classique
+      const details = getCustomerDetails ? getCustomerDetails() : {};
+      const payload = {
+        items: stripeItems,
+        clientName: details.customerName || '',
+        clientEmail: details.customerEmail || ''
+      };
+      const result = await createStripePaymentIntent(payload);
       if (result.ok) {
         const openResult = await openEmbeddedStripePayment({
           clientSecret: result.clientSecret,
@@ -3478,3 +3477,49 @@ initDynamicContent().catch(() => {
 initAdminBackoffice();
 loadReservationAvailability();
 initContactForm();
+
+// Fonction de secours : ferme toutes les modales et réactive le scroll
+function resetUI() {
+  // Lightbox
+  if (typeof closeLightbox === 'function') closeLightbox();
+  if (lightbox) {
+    lightbox.classList.remove('open');
+    lightbox.setAttribute('aria-hidden', 'true');
+  }
+  // Stripe preview
+  const stripePreview = document.getElementById('stripe-preview');
+  if (stripePreview) {
+    stripePreview.classList.remove('open');
+    stripePreview.setAttribute('aria-hidden', 'true');
+  }
+  // Stripe embedded
+  const stripeEmbedded = document.getElementById('stripe-embedded-payment');
+  if (stripeEmbedded) {
+    stripeEmbedded.classList.remove('open');
+    stripeEmbedded.setAttribute('aria-hidden', 'true');
+  }
+  // Product modal
+  const productModal = document.getElementById('product-modal');
+  if (productModal) {
+    productModal.classList.remove('open');
+    productModal.setAttribute('aria-hidden', 'true');
+  }
+  // Reservation slot modal
+  const reservationSlotModal = document.getElementById('reservation-slot-modal');
+  if (reservationSlotModal) {
+    reservationSlotModal.classList.remove('open');
+    reservationSlotModal.setAttribute('aria-hidden', 'true');
+  }
+  // Réactive le scroll
+  document.body.style.overflow = '';
+}
+
+// Raccourci clavier F12 pour reset UI
+// Appuyer sur F12 ferme toutes les modales et réactive le scroll
+// (utile si l'UI est bloquée)
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'F12') {
+    resetUI();
+    alert('UI réinitialisée (toutes les modales fermées)');
+  }
+});

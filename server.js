@@ -1318,6 +1318,8 @@ app.post('/api/create-checkout-session', async (req, res) => {
 });
 
 app.post('/api/create-payment-intent', async (req, res) => {
+    // Log pour debug : vérifier l'email client reçu
+    console.log('[Paiement] Email reçu du front:', req.body.clientEmail);
   if (!stripe) {
     return res.status(500).json({ error: 'Stripe secret key is missing on server' });
   }

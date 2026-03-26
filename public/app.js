@@ -2336,7 +2336,7 @@ async function getStripeClient() {
     });
   }
   // Récupère la clé publique Stripe depuis le backend
-  const response = await fetch('/api/stripe-publishable-key');
+  const response = await fetch('/api/public-config');
   const data = await response.json();
   if (!data.publishableKey) return null;
   stripeClientPromise = window.Stripe(data.publishableKey);

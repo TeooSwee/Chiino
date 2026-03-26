@@ -471,6 +471,76 @@ nav > a:active{
 .stripe-preview-actions .add-btn{flex:1}
 .stripe-preview-actions .btn-pay{flex:1}
 
+.stripe-embedded-payment{
+  position:fixed;
+  inset:0;
+  background:rgba(4,6,12,0.92);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  z-index:1460;
+}
+.stripe-embedded-payment.open{display:flex}
+.stripe-embedded-card{
+  width:min(560px,96vw);
+  background:var(--noir);
+  border:1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+}
+.stripe-embedded-head{
+  padding:16px 18px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.stripe-embedded-head strong{font-family:'Syne',sans-serif;font-size:18px}
+.stripe-embedded-close{
+  width:34px;
+  height:34px;
+  border:1px solid var(--border);
+  border-radius:50%;
+  background:var(--bleu);
+  color:var(--paper);
+  cursor:pointer;
+  font-size:20px;
+}
+.stripe-embedded-body{padding:16px 18px}
+.stripe-embedded-note{font-size:11px;color:var(--muted);margin-bottom:8px}
+.stripe-embedded-order{font-size:11px;color:var(--paper);margin-bottom:10px}
+.stripe-embedded-step{display:block}
+.stripe-embedded-step-hidden{display:none}
+.stripe-embedded-customer{display:grid;gap:8px;margin-bottom:10px;grid-template-columns:1fr 1fr}
+.stripe-embedded-customer .fg:nth-child(3),
+.stripe-embedded-customer .fg:nth-child(8){grid-column:1 / -1}
+.stripe-embedded-customer .fg{gap:4px}
+.stripe-embedded-customer .fg label{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.stripe-embedded-customer .fg input{
+  background:rgba(13,31,60,.4);
+  border:1px solid var(--border);
+  color:var(--paper);
+  padding:10px 12px;
+  border-radius:4px;
+  font-size:12px;
+  font-family:'Inter',sans-serif;
+}
+.stripe-embedded-customer .fg select{
+  background:rgba(13,31,60,.4);
+  border:1px solid var(--border);
+  color:var(--paper);
+  padding:10px 12px;
+  border-radius:4px;
+  font-size:12px;
+  font-family:'Inter',sans-serif;
+}
+.stripe-embedded-element{padding:8px;border:1px solid var(--border);border-radius:6px;background:rgba(13,31,60,.24)}
+.stripe-embedded-error{margin-top:10px;min-height:16px;font-size:11px;color:#ffb7c1}
+.stripe-embedded-actions{display:flex;gap:10px;margin-top:12px}
+.stripe-embedded-actions .add-btn{flex:1}
+.stripe-embedded-actions .btn-pay{flex:1}
+
 .floating-cart{
   position:fixed;
   right: 50px;
@@ -690,7 +760,17 @@ nav > a:active{
 .admin-existing-row strong{font-size:11px;color:var(--paper)}
 .admin-existing-row span{font-size:10px;color:var(--paper);opacity:.85}
 .admin-existing-note{font-size:10px;color:var(--paper);opacity:.9;line-height:1.4}
-.admin-home-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.admin-order-row{border:1px solid var(--border);background:var(--bleu);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.admin-order-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.admin-order-top strong{font-size:12px;color:var(--paper)}
+.admin-order-top span{font-size:10px;color:var(--accent);letter-spacing:1px;text-transform:uppercase}
+.admin-order-line{font-size:10px;color:var(--muted);line-height:1.5}
+.admin-order-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.admin-order-controls select,
+.admin-order-controls input,
+.admin-order-row textarea{background:rgba(10,10,15,.55);border:1px solid var(--border);color:var(--paper);border-radius:4px;padding:8px 10px;font-size:11px;font-family:'Inter',sans-serif}
+.admin-order-row textarea{min-height:64px;resize:vertical}
+.admin-home-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .admin-home-btn{padding:16px 12px !important;font-size:12px}
 .admin-inline-actions{display:flex;gap:10px;flex-wrap:wrap}
 .admin-modal-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
@@ -721,6 +801,7 @@ nav > a:active{
   .admin-head-actions{width:100%}
   .admin-row{flex-direction:column;align-items:stretch}
   .admin-row-actions{width:100%;justify-content:flex-end;flex-wrap:wrap}
+  .admin-order-controls{grid-template-columns:1fr}
   .admin-week-head{align-items:flex-start;flex-direction:column}
   .admin-planner-stats{width:100%}
   .admin-week-nav{flex-wrap:wrap}

@@ -6,13 +6,16 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "data:fly:backup": "./scripts/backup-data-from-fly.sh chiino",
+    "data:fly:sync": "./scripts/sync-data-to-fly.sh chiino ./data"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^8.3.1",
     "helmet": "^8.1.0",
+    "nodemailer": "^8.0.4",
     "stripe": "^17.1.1",
     "twilio": "^5.13.0"
   }

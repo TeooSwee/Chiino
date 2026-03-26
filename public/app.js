@@ -87,6 +87,7 @@ let defaultRealisationOverridesState = {};
 let featuredProductsState = [];
 let featuredRealisationsState = [];
 let scheduleEntriesState = [];
+let ordersState = [];
 let adminPlannerWeekStartState = null;
 let editingProductId = null;
 let editingRealId = null;
@@ -97,6 +98,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'FLASH-GEO-V3',
     name: 'Crème réparatrice',
+    supplier: 'TAT-EU',
+    shipping: '3-6 jours ouvres',
     shortDesc: 'Hydratation de votre peau.',
     details: 'Crème réparatrice enrichie en agents apaisants pour nourrir la peau tatouée et aider à maintenir son confort au quotidien.',
     price: 28,
@@ -110,6 +113,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'SOIN-GEL-50',
     name: 'Gel cicatrisant',
+    supplier: 'TAT-EU',
+    shipping: '3-6 jours ouvres',
     shortDesc: 'Cicatrisation de votre tatouage',
     details: 'Gel cicatrisant à absorption rapide, conçu pour accompagner la phase de cicatrisation et protéger l\'éclat du tatouage.',
     price: 22,
@@ -123,6 +128,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'FLASH-SERPENTS',
     name: 'Flash Tattoo',
+    supplier: 'TAT-EU',
+    shipping: '3-6 jours ouvres',
     shortDesc: 'A5 couverture rigide, + 100 motifs',
     details: 'Flash Tattoo regroupant une sélection de motifs prêts à tatouer, avec un style marqué pour inspirer ton prochain projet.',
     price: 15,
@@ -136,6 +143,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'NOTEBOOK-CHIINO',
     name: 'Carnet de croquis - Chiino',
+    supplier: 'TAT-EU',
+    shipping: '3-6 jours ouvres',
     shortDesc: 'A5 couverture rigide, 40 pages',
     details: 'Carnet de croquis - Chiino idéal pour préparer des idées, esquisser des compositions et conserver ses références visuelles.',
     price: 12,
@@ -149,6 +158,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   {
     id: 'TSHIRT-CHIINO',
     name: 'T-shirt - Logo Chiino',
+    supplier: 'TAT-EU',
+    shipping: '3-6 jours ouvres',
     shortDesc: 'Coton bio, noir, tailles S-XL',
     details: 'T-shirt - Logo Chiino en coton bio, coupe unisexe confortable, avec impression signature pour un look studio affirmé.',
     price: 36,
@@ -232,12 +243,35 @@ function persistStateToLocalStorage() {
 
 async function tryLoadStateFromServer() {
   try {
-    const data = await fetchJson('/api/admin/content');
+    const password = getAdminPasswordFromSession();
+    const headers = password ? { 'x-admin-password': password } : {};
+    const response = await fetch('/api/admin/content', { headers });
+
+    // Le serveur est joignable mais l'admin n'est pas encore authentifié.
+    if (response.status === 401 || response.status === 403) {
+      serverAdminAvailable = true;
+      return false;
+    }
+
+    if (!response.ok) {
+      throw new Error('request-failed');
+    }
+
+    const data = await response.json().catch(() => ({}));
     serverAdminAvailable = true;
     applyContentState(data);
     return true;
   } catch (error) {
     serverAdminAvailable = false;
+    return false;
+  }
+}
+
+async function isServerReachable() {
+  try {
+    const response = await fetch('/api/health');
+    return response.ok;
+  } catch (error) {
     return false;
   }
 }
@@ -324,6 +358,8 @@ function applyProductDataToCard(card, product) {
   if (!card || !product) return;
 
   card.dataset.category = normalizeProductCategory(product.category);
+  card.dataset.supplier = product.supplier || card.dataset.supplier || 'Partenaire';
+  card.dataset.shipping = product.shipping || card.dataset.shipping || '5-10 jours ouvres';
   card.dataset.details = product.details || product.name;
   card.dataset.price = String(product.price || 0);
   card.dataset.optionLabel = product.optionLabel || '';
@@ -521,7 +557,8 @@ function buildCustomProductCard(item) {
   card.className = 'product';
   card.dataset.customItem = '1';
   card.dataset.sku = item.sku;
-  card.dataset.supplier = item.supplier || 'Back-office';
+  card.dataset.supplier = item.supplier || 'Partenaire';
+  card.dataset.shipping = item.shipping || '5-10 jours ouvres';
   card.dataset.price = String(item.price);
   card.dataset.category = normalizeProductCategory(item.category);
   card.dataset.details = item.details || item.shortDesc || item.name;
@@ -745,6 +782,92 @@ function toLocalDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
+function getOrderStatusLabel(status) {
+  const key = String(status || '').toLowerCase().trim();
+  if (key === 'processing') return 'Preparation';
+  if (key === 'fulfilled') return 'Expediee';
+  if (key === 'delivered') return 'Livree';
+  if (key === 'refunded') return 'Remboursee';
+  if (key === 'canceled') return 'Annulee';
+  return 'Payee';
+}
+
+function getOrderStatusOptions(selected, canShipOrder) {
+  const current = String(selected || 'paid').toLowerCase();
+  const options = [
+    { value: 'paid', label: 'Payee' },
+    { value: 'processing', label: 'Preparation' },
+    { value: 'fulfilled', label: 'Expediee' },
+    { value: 'delivered', label: 'Livree' },
+    { value: 'refunded', label: 'Remboursee' },
+    { value: 'canceled', label: 'Annulee' }
+  ];
+
+  return options.map((option) => {
+    const selectedAttr = option.value === current ? ' selected' : '';
+    const isShippingStatus = option.value === 'fulfilled' || option.value === 'delivered';
+    const disabledAttr = (!canShipOrder && isShippingStatus) ? ' disabled' : '';
+    return '<option value="' + option.value + '"' + selectedAttr + disabledAttr + '>' + option.label + '</option>';
+  }).join('');
+}
+
+function getDispatchStatusLabel(status) {
+  const key = String(status || '').toLowerCase().trim();
+  if (key === 'sent') return 'Envoyee fournisseur';
+  if (key === 'failed') return 'Echec envoi';
+  return 'A envoyer manuellement';
+}
+
+function renderAdminOrders() {
+  const list = document.getElementById('admin-orders-list');
+  if (!list) return;
+
+  if (!serverAdminAvailable) {
+    list.innerHTML = '<p style="font-size:11px;color:var(--muted)">Le suivi commandes est disponible quand le serveur API est accessible.</p>';
+    return;
+  }
+
+  const orders = Array.isArray(ordersState) ? ordersState : [];
+  if (!orders.length) {
+    list.innerHTML = '<p style="font-size:11px;color:var(--muted)">Aucune commande enregistrée pour le moment.</p>';
+    return;
+  }
+
+  list.innerHTML = orders.map((order) => {
+    const createdAt = order.createdAt
+      ? new Date(order.createdAt).toLocaleString('fr-FR')
+      : 'Date inconnue';
+    const amountText = Number.isFinite(Number(order.amountTotal))
+      ? (Number(order.amountTotal) / 100).toFixed(2).replace('.', ',') + ' ' + String(order.currency || 'EUR').toUpperCase()
+      : '0,00 EUR';
+
+    const canRetryDispatch = String(order.dispatchStatus || '') !== 'sent';
+    const canShipOrder = String(order.dispatchStatus || '').toLowerCase() === 'sent';
+    const dispatchButtonLabel = String(order.dispatchStatus || '') === 'failed'
+      ? 'Relancer envoi TAT-EU'
+      : 'Envoyer a TAT-EU';
+
+    return '<div class="admin-order-row">' +
+      '<div class="admin-order-top">' +
+        '<strong>' + escapeHtml(order.orderRef || order.id || 'Commande') + '</strong>' +
+        '<span>' + escapeHtml(getOrderStatusLabel(order.status)) + '</span>' +
+      '</div>' +
+      '<p class="admin-order-line">' + escapeHtml(createdAt) + ' • ' + escapeHtml(amountText) + '</p>' +
+      '<p class="admin-order-line">Client: ' + escapeHtml(order.customerName || 'Non renseigne') + (order.customerEmail ? ' • ' + escapeHtml(order.customerEmail) : '') + '</p>' +
+      '<p class="admin-order-line">Produits: ' + escapeHtml(order.itemsLabel || 'Non disponible') + '</p>' +
+      '<p class="admin-order-line">Fournisseur: ' + escapeHtml(order.supplierProvider || 'Auto') + ' • ' + escapeHtml(getDispatchStatusLabel(order.dispatchStatus)) + (order.supplierOrderId ? (' • Ref: ' + escapeHtml(order.supplierOrderId)) : '') + '</p>' +
+      (!canShipOrder ? '<p class="admin-order-line">Info: envoi manuel TAT-EU requis avant statut Expediee/Livree.</p>' : '') +
+      (order.dispatchMessage ? '<p class="admin-order-line">Detail envoi: ' + escapeHtml(order.dispatchMessage) + '</p>' : '') +
+      '<div class="admin-order-controls">' +
+        '<select data-order-status="' + escapeHtml(order.id || '') + '" data-order-dispatched="' + (canShipOrder ? '1' : '0') + '">' + getOrderStatusOptions(order.status, canShipOrder) + '</select>' +
+        '<input type="text" data-order-tracking="' + escapeHtml(order.id || '') + '" placeholder="Tracking" value="' + escapeHtml(order.trackingNumber || '') + '">' +
+      '</div>' +
+      '<textarea data-order-note="' + escapeHtml(order.id || '') + '" placeholder="Note interne">' + escapeHtml(order.adminNote || '') + '</textarea>' +
+      '<div class="admin-row-actions"><button class="add-btn" data-order-save="' + escapeHtml(order.id || '') + '">Enregistrer</button>' + (canRetryDispatch ? '<button class="add-btn" data-order-dispatch="' + escapeHtml(order.id || '') + '">' + dispatchButtonLabel + '</button>' : '') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
 function renderAdminSchedulePlanner() {
   const planner = document.getElementById('admin-schedule-planner');
   if (!planner) return;
@@ -952,6 +1075,7 @@ function renderAdminLists() {
     }).join('');
   }
 
+  renderAdminOrders();
   renderAdminSchedulePlanner();
 
 }
@@ -966,9 +1090,11 @@ function initAdminBackoffice() {
   const passwordInput = document.getElementById('admin-password');
   const loginFeedback = document.getElementById('admin-login-feedback');
   const homeCard = document.getElementById('admin-home');
+  const moduleOrders = document.getElementById('admin-module-orders');
   const moduleProducts = document.getElementById('admin-module-products');
   const moduleReals = document.getElementById('admin-module-reals');
   const moduleSchedule = document.getElementById('admin-module-schedule');
+  const refreshOrdersBtn = document.getElementById('admin-refresh-orders');
   const productFormTitle = document.getElementById('admin-product-form-title');
   const realFormTitle = document.getElementById('admin-real-form-title');
   const cancelProductEditBtn = document.getElementById('admin-cancel-product-edit');
@@ -1228,12 +1354,34 @@ function initAdminBackoffice() {
     loginFeedback.classList.add(type === 'ok' ? 'ok' : 'err');
   };
 
+  const loadAdminOrders = async () => {
+    if (!serverAdminAvailable) {
+      ordersState = [];
+      renderAdminOrders();
+      return;
+    }
+
+    try {
+      const data = await adminApi('/api/admin/orders', 'GET');
+      ordersState = Array.isArray(data.orders) ? data.orders : [];
+      renderAdminOrders();
+    } catch (error) {
+      ordersState = [];
+      renderAdminOrders();
+      showAdminFeedback('Impossible de charger les commandes.', 'err');
+    }
+  };
+
   const showAdminModule = (target) => {
     const key = target || 'home';
     if (homeCard) homeCard.style.display = key === 'home' ? '' : 'none';
+    if (moduleOrders) moduleOrders.style.display = key === 'orders' ? '' : 'none';
     if (moduleProducts) moduleProducts.style.display = key === 'products' ? '' : 'none';
     if (moduleReals) moduleReals.style.display = key === 'reals' ? '' : 'none';
     if (moduleSchedule) moduleSchedule.style.display = key === 'schedule' ? '' : 'none';
+    if (key === 'orders') {
+      loadAdminOrders();
+    }
     if (key === 'schedule') {
       adminPlannerWeekStartState = null;
       renderAdminSchedulePlanner();
@@ -1244,12 +1392,17 @@ function initAdminBackoffice() {
     if (loginWrap) loginWrap.style.display = 'none';
     if (panel) panel.style.display = 'grid';
     await refreshContentState();
+    await loadAdminOrders();
     renderAdminLists();
     showAdminModule('home');
   };
 
   page.querySelectorAll('[data-admin-target]').forEach((btn) => {
     btn.addEventListener('click', () => showAdminModule(btn.dataset.adminTarget));
+  });
+
+  refreshOrdersBtn?.addEventListener('click', () => {
+    loadAdminOrders();
   });
 
   if (sessionStorage.getItem(ADMIN_SESSION_KEY) === 'ok') {
@@ -1267,7 +1420,7 @@ function initAdminBackoffice() {
       return;
     }
 
-    const serverReachable = await tryLoadStateFromServer();
+    const serverReachable = await isServerReachable();
     if (serverReachable) {
       try {
         await fetchJson('/api/admin/login', {
@@ -1331,7 +1484,8 @@ function initAdminBackoffice() {
     const productPayload = {
       id: editingProductId || ('prod-' + Date.now().toString(36)),
       sku: existingProduct?.sku || editingProductId || ('CUSTOM-' + Date.now().toString(36)),
-      supplier: 'Back-office',
+      supplier: existingProduct?.supplier || 'Partenaire',
+      shipping: existingProduct?.shipping || '5-10 jours ouvres',
       name,
       shortDesc,
       details: details || name,
@@ -1681,9 +1835,60 @@ function initAdminBackoffice() {
     const editDefaultRealId = event.target?.dataset?.editDefaultReal;
     const toggleDefaultProductId = event.target?.dataset?.toggleDefaultProduct;
     const toggleDefaultRealId = event.target?.dataset?.toggleDefaultReal;
+    const orderSaveId = event.target?.dataset?.orderSave;
+    const orderDispatchId = event.target?.dataset?.orderDispatch;
     const scheduleDeleteId = event.target?.dataset?.scheduleDelete;
     const scheduleStatusId = event.target?.dataset?.scheduleStatus;
     const scheduleEditId = scheduleEditTarget?.dataset?.scheduleEdit;
+
+    if (orderDispatchId) {
+      if (!serverAdminAvailable) {
+        showAdminFeedback('Le suivi commandes nécessite le serveur actif.', 'err');
+        return;
+      }
+
+      try {
+        await adminApi('/api/admin/orders/' + encodeURIComponent(orderDispatchId) + '/dispatch', 'POST');
+        await loadAdminOrders();
+        showAdminFeedback('Relance fournisseur effectuée.', 'ok');
+      } catch (error) {
+        showAdminFeedback('Relance fournisseur impossible.', 'err');
+      }
+      return;
+    }
+
+    if (orderSaveId) {
+      if (!serverAdminAvailable) {
+        showAdminFeedback('Le suivi commandes nécessite le serveur actif.', 'err');
+        return;
+      }
+
+      const statusInput = page.querySelector('[data-order-status="' + orderSaveId + '"]');
+      const trackingInput = page.querySelector('[data-order-tracking="' + orderSaveId + '"]');
+      const noteInput = page.querySelector('[data-order-note="' + orderSaveId + '"]');
+      const isDispatched = statusInput?.dataset?.orderDispatched === '1';
+      const wantedStatus = String(statusInput?.value || 'paid').toLowerCase();
+
+      if ((wantedStatus === 'fulfilled' || wantedStatus === 'delivered') && !isDispatched) {
+        showAdminFeedback('Envoi manuel TAT-EU requis avant statut Expediee/Livree.', 'err');
+        return;
+      }
+
+      const payload = {
+        status: statusInput?.value || 'paid',
+        trackingNumber: trackingInput?.value?.trim() || '',
+        adminNote: noteInput?.value?.trim() || ''
+      };
+
+      try {
+        await adminApi('/api/admin/orders/' + encodeURIComponent(orderSaveId) + '/status', 'PUT', payload);
+        await loadAdminOrders();
+        showAdminFeedback('Commande mise à jour.', 'ok');
+      } catch (error) {
+        showAdminFeedback(String(error?.message || 'Mise à jour commande impossible côté serveur.'), 'err');
+      }
+      return;
+    }
 
     if (editDefaultProductId) {
       const item = getMergedDefaultProduct(editDefaultProductId);
@@ -2038,8 +2243,13 @@ if (lightbox) {
 
 document.addEventListener('keydown', (event) => {
   const stripePreview = document.getElementById('stripe-preview');
+  const stripeEmbedded = document.getElementById('stripe-embedded-payment');
   if (event.key === 'Escape' && stripePreview && stripePreview.classList.contains('open')) {
     stripePreview.querySelector('#stripe-preview-close')?.click();
+    return;
+  }
+  if (event.key === 'Escape' && stripeEmbedded && stripeEmbedded.classList.contains('open')) {
+    stripeEmbedded.querySelector('#stripe-embedded-close')?.click();
     return;
   }
   if (event.key === 'Escape' && reservationSlotModal && reservationSlotModal.classList.contains('open')) {
@@ -2101,8 +2311,13 @@ const reservationSlotHint = document.getElementById('reservation-slot-hint');
 const reservationSlotSelectedLabel = document.getElementById('reservation-slot-selected');
 
 let cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
+// Correction Stripe : rendre stripeItems global pour le paiement
+let stripeItems = [];
 let stripeClientPromise = null;
 let stripePreviewConfirmAction = null;
+let shopPaymentElements = null;
+let shopPaymentStripe = null;
+let shopPaymentConfirmHandler = null;
 let reservationPickerWeekStart = null;
 let reservationSelectedSlot = null;
 let reservationDraftSlot = null;
@@ -2238,6 +2453,323 @@ async function startStripeCheckout(endpoint, payload) {
     return { ok: false, reason: redirect.error.message || 'redirect-error' };
   }
 
+  return { ok: true };
+}
+
+async function createStripePaymentIntent(payload) {
+  const response = await fetch('/api/create-payment-intent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {})
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.clientSecret) {
+    return { ok: false, reason: data.error || 'payment-intent-error' };
+  }
+
+  return {
+    ok: true,
+    clientSecret: data.clientSecret,
+    amount: Number(data.amount || 0),
+    orderRef: String(data.orderRef || '')
+  };
+}
+
+function ensureShopPaymentDom() {
+  let modal = document.getElementById('stripe-embedded-payment');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'stripe-embedded-payment';
+  modal.className = 'stripe-embedded-payment';
+  modal.setAttribute('aria-hidden', 'true');
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-label', 'Paiement sécurisé');
+  modal.setAttribute('tabindex', '-1');
+  modal.innerHTML =
+    '<div class="stripe-embedded-card">' +
+      '<div class="stripe-embedded-head">' +
+        '<strong>Paiement sécurisé <span style="color:#2196f3;font-size:1.2em;vertical-align:middle;">•</span></strong>' +
+        '<button id="stripe-embedded-close" class="stripe-embedded-close" aria-label="Fermer">x</button>' +
+      '</div>' +
+      '<div class="stripe-embedded-body">' +
+        '<p id="stripe-embedded-note" class="stripe-embedded-note">Finalise ton paiement sans quitter la boutique.</p>' +
+        '<p id="stripe-embedded-order" class="stripe-embedded-order"></p>' +
+        '<div id="stripe-embedded-step-info" class="stripe-embedded-step">' +
+          '<div class="stripe-embedded-customer">' +
+            '<div class="fg"><label for="stripe-embedded-customer-first-name">Prenom</label><input id="stripe-embedded-customer-first-name" type="text" placeholder="Ex: Lea"></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-last-name">Nom</label><input id="stripe-embedded-customer-last-name" type="text" placeholder="Ex: Martin"></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-address">Adresse</label><input id="stripe-embedded-customer-address" type="text" placeholder="Ex: 12 rue des Fleurs"></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-postal">Code postal</label><input id="stripe-embedded-customer-postal" type="text" placeholder="Ex: 67000"></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-city">Ville</label><input id="stripe-embedded-customer-city" type="text" placeholder="Ex: Strasbourg"></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-country">Pays</label><select id="stripe-embedded-customer-country"><option value="" disabled selected>Choisir un pays</option><option value="FR">France</option><option value="BE">Belgique</option><option value="CH">Suisse</option><option value="LU">Luxembourg</option><option value="DE">Allemagne</option><option value="ES">Espagne</option><option value="IT">Italie</option><option value="CA">Canada</option><option value="US">Etats-Unis</option></select></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-email">Email</label><input id="stripe-embedded-customer-email" type="email" placeholder="exemple@email.com"></div>' +
+            '<div class="fg"><label for="stripe-embedded-customer-phone">Telephone (optionnel)</label><input id="stripe-embedded-customer-phone" type="tel" placeholder="06 12 34 56 78"></div>' +
+          '</div>' +
+          '<div class="stripe-embedded-actions">' +
+            '<button id="stripe-embedded-cancel-info" class="add-btn">Retour</button>' +
+            '<button id="stripe-embedded-next" class="btn-pay">Continuer</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="stripe-embedded-step-payment" class="stripe-embedded-step stripe-embedded-step-hidden">' +
+          '<div id="stripe-embedded-element" class="stripe-embedded-element"></div>' +
+          '<div class="stripe-embedded-actions">' +
+            '<button id="stripe-embedded-back-to-info" class="add-btn">Infos</button>' +
+            '<button id="stripe-embedded-pay" class="btn-pay">Payer maintenant</button>' +
+          '</div>' +
+        '</div>' +
+        '<p id="stripe-embedded-error" class="stripe-embedded-error" aria-live="polite"></p>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  const close = () => {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    shopPaymentConfirmHandler = null;
+    if (shopPaymentElements && typeof shopPaymentElements.getElement === 'function') {
+      const element = shopPaymentElements.getElement('payment');
+      if (element) element.unmount();
+    }
+    shopPaymentElements = null;
+    shopPaymentStripe = null;
+    document.body.style.overflow = '';
+    restoreFocus();
+  };
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) close();
+  });
+
+  modal.querySelector('#stripe-embedded-close')?.addEventListener('click', close);
+  modal.querySelector('#stripe-embedded-cancel-info')?.addEventListener('click', close);
+  modal.querySelector('#stripe-embedded-pay')?.addEventListener('click', async () => {
+    if (typeof shopPaymentConfirmHandler === 'function') {
+      await shopPaymentConfirmHandler();
+    }
+  });
+
+  return modal;
+}
+
+async function openEmbeddedStripePayment(options) {
+  const stripe = await getStripeClient();
+  if (!stripe) return { ok: false, reason: 'no-stripe-client' };
+
+  const modal = ensureShopPaymentDom();
+  const elementWrap = modal.querySelector('#stripe-embedded-element');
+  const errorEl = modal.querySelector('#stripe-embedded-error');
+  const orderEl = modal.querySelector('#stripe-embedded-order');
+  const payBtn = modal.querySelector('#stripe-embedded-pay');
+  const nextBtn = modal.querySelector('#stripe-embedded-next');
+  const backToInfoBtn = modal.querySelector('#stripe-embedded-back-to-info');
+  const infoStep = modal.querySelector('#stripe-embedded-step-info');
+  const paymentStep = modal.querySelector('#stripe-embedded-step-payment');
+  const customerFirstNameInput = modal.querySelector('#stripe-embedded-customer-first-name');
+  const customerLastNameInput = modal.querySelector('#stripe-embedded-customer-last-name');
+  const customerAddressInput = modal.querySelector('#stripe-embedded-customer-address');
+  const customerPostalInput = modal.querySelector('#stripe-embedded-customer-postal');
+  const customerCityInput = modal.querySelector('#stripe-embedded-customer-city');
+  const customerCountryInput = modal.querySelector('#stripe-embedded-customer-country');
+  const customerEmailInput = modal.querySelector('#stripe-embedded-customer-email');
+  const customerPhoneInput = modal.querySelector('#stripe-embedded-customer-phone');
+
+  rememberFocus();
+  if (errorEl) errorEl.textContent = '';
+  if (orderEl) orderEl.textContent = options.orderRef ? ('Reference: ' + options.orderRef) : '';
+
+  if (customerFirstNameInput && !customerFirstNameInput.value) {
+    customerFirstNameInput.value = localStorage.getItem('chiino_checkout_customer_first_name') || '';
+  }
+  if (customerLastNameInput && !customerLastNameInput.value) {
+    customerLastNameInput.value = localStorage.getItem('chiino_checkout_customer_last_name') || '';
+  }
+  if (customerAddressInput && !customerAddressInput.value) {
+    customerAddressInput.value = localStorage.getItem('chiino_checkout_customer_address') || '';
+  }
+  if (customerPostalInput && !customerPostalInput.value) {
+    customerPostalInput.value = localStorage.getItem('chiino_checkout_customer_postal') || '';
+  }
+  if (customerCityInput && !customerCityInput.value) {
+    customerCityInput.value = localStorage.getItem('chiino_checkout_customer_city') || '';
+  }
+  if (customerCountryInput && !customerCountryInput.value) {
+    customerCountryInput.value = localStorage.getItem('chiino_checkout_customer_country') || '';
+  }
+  if (customerEmailInput && !customerEmailInput.value) {
+    customerEmailInput.value = localStorage.getItem('chiino_checkout_customer_email') || '';
+  }
+  if (customerPhoneInput && !customerPhoneInput.value) {
+    customerPhoneInput.value = localStorage.getItem('chiino_checkout_customer_phone') || '';
+  }
+
+  if (infoStep && paymentStep) {
+    infoStep.classList.remove('stripe-embedded-step-hidden');
+    paymentStep.classList.add('stripe-embedded-step-hidden');
+  }
+
+  shopPaymentStripe = stripe;
+  shopPaymentElements = stripe.elements({
+    clientSecret: options.clientSecret,
+    appearance: { theme: 'night' }
+  });
+
+  const paymentElement = shopPaymentElements.create('payment');
+  paymentElement.mount(elementWrap);
+
+  const getCustomerDetails = () => {
+    const customerFirstName = String(customerFirstNameInput?.value || '').trim();
+    const customerLastName = String(customerLastNameInput?.value || '').trim();
+    const customerAddress = String(customerAddressInput?.value || '').trim();
+    const customerPostal = String(customerPostalInput?.value || '').trim();
+    const customerCity = String(customerCityInput?.value || '').trim();
+    const customerCountry = String(customerCountryInput?.value || '').trim().toUpperCase();
+    const customerEmail = String(customerEmailInput?.value || '').trim();
+    const customerPhone = String(customerPhoneInput?.value || '').trim();
+    const customerName = [customerFirstName, customerLastName].filter(Boolean).join(' ').trim();
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
+    const postalOk = /^[A-Za-z0-9\s-]{3,12}$/.test(customerPostal);
+    const requiredMissing = !customerFirstName || !customerLastName || !customerAddress || !postalOk || !customerCity || !customerCountry || !emailOk;
+
+    return {
+      customerFirstName,
+      customerLastName,
+      customerAddress,
+      customerPostal,
+      customerCity,
+      customerCountry,
+      customerEmail,
+      customerPhone,
+      customerName,
+      requiredMissing
+    };
+  };
+
+  nextBtn.onclick = () => {
+    const details = getCustomerDetails();
+
+    if (details.requiredMissing) {
+      if (errorEl) errorEl.textContent = 'Merci de renseigner prenom, nom, adresse, code postal, ville, pays et un email valide avant paiement.';
+      return;
+    }
+
+    localStorage.setItem('chiino_checkout_customer_first_name', details.customerFirstName);
+    localStorage.setItem('chiino_checkout_customer_last_name', details.customerLastName);
+    localStorage.setItem('chiino_checkout_customer_address', details.customerAddress);
+    localStorage.setItem('chiino_checkout_customer_postal', details.customerPostal);
+    localStorage.setItem('chiino_checkout_customer_city', details.customerCity);
+    localStorage.setItem('chiino_checkout_customer_country', details.customerCountry);
+    localStorage.setItem('chiino_checkout_customer_email', details.customerEmail);
+    localStorage.setItem('chiino_checkout_customer_phone', details.customerPhone);
+
+    if (errorEl) errorEl.textContent = '';
+    if (infoStep && paymentStep) {
+      infoStep.classList.add('stripe-embedded-step-hidden');
+      paymentStep.classList.remove('stripe-embedded-step-hidden');
+    }
+  };
+
+  backToInfoBtn.onclick = () => {
+    if (errorEl) errorEl.textContent = '';
+    if (infoStep && paymentStep) {
+      paymentStep.classList.add('stripe-embedded-step-hidden');
+      infoStep.classList.remove('stripe-embedded-step-hidden');
+    }
+  };
+
+  shopPaymentConfirmHandler = async () => {
+    if (!shopPaymentStripe || !shopPaymentElements) return;
+
+    const details = getCustomerDetails();
+
+    if (details.requiredMissing) {
+      if (errorEl) errorEl.textContent = 'Merci de renseigner prenom, nom, adresse, code postal, ville, pays et un email valide avant paiement.';
+      return;
+    }
+
+    localStorage.setItem('chiino_checkout_customer_first_name', details.customerFirstName);
+    localStorage.setItem('chiino_checkout_customer_last_name', details.customerLastName);
+    localStorage.setItem('chiino_checkout_customer_address', details.customerAddress);
+    localStorage.setItem('chiino_checkout_customer_postal', details.customerPostal);
+    localStorage.setItem('chiino_checkout_customer_city', details.customerCity);
+    localStorage.setItem('chiino_checkout_customer_country', details.customerCountry);
+    localStorage.setItem('chiino_checkout_customer_email', details.customerEmail);
+    localStorage.setItem('chiino_checkout_customer_phone', details.customerPhone);
+
+    if (payBtn) {
+      payBtn.disabled = true;
+      payBtn.textContent = 'Paiement en cours...';
+    }
+    if (errorEl) errorEl.textContent = '';
+
+    // Log pour debug : vérifier l'email transmis à Stripe
+    console.log('[Paiement] Email transmis à Stripe:', details.customerEmail);
+    // On transmet le nom et l'email dans le PaymentIntent (metadata)
+    const result = await createStripePaymentIntent({
+      items: stripeItems,
+      clientName: details.customerName,
+      clientEmail: details.customerEmail
+    });
+
+    if (!result.ok) {
+      if (errorEl) errorEl.textContent = 'Erreur lors de la création du paiement.';
+      return;
+    }
+
+    const { error, paymentIntent } = await shopPaymentStripe.confirmPayment({
+      elements: shopPaymentElements,
+      payment_method_data: {
+        billing_details: {
+          name: details.customerName,
+          email: details.customerEmail,
+          address: {
+            line1: details.customerAddress,
+            postal_code: details.customerPostal,
+            city: details.customerCity,
+            country: details.customerCountry
+          },
+          phone: details.customerPhone || undefined
+        }
+      },
+      confirmParams: {
+        return_url: window.location.origin + '/boutique.html?payment=return'
+      },
+      redirect: 'if_required'
+    });
+
+    if (payBtn) {
+      payBtn.disabled = false;
+      payBtn.textContent = 'Payer maintenant';
+    }
+
+    if (error) {
+      if (errorEl) errorEl.textContent = String(error.message || 'Paiement impossible, merci de réessayer.');
+      return;
+    }
+
+    const status = String(paymentIntent?.status || '').toLowerCase();
+    if (status === 'succeeded' || status === 'processing' || status === 'requires_capture') {
+      cart = [];
+      renderCart();
+      closeCart();
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      alert('Paiement validé. La commande est enregistrée et disponible dans le back-office.');
+      restoreFocus();
+      return;
+    }
+
+    if (errorEl) errorEl.textContent = 'Paiement non confirmé pour le moment. Vérifie le statut dans Stripe.';
+  };
+
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  modal.querySelector('#stripe-embedded-pay')?.focus();
   return { ok: true };
 }
 
@@ -2597,7 +3129,6 @@ if (productModalAdd) {
     addToCart({
       sku: (activeModalProduct.dataset.sku || title) + optionSuffix,
       stripeSku: activeModalProduct.dataset.sku || title,
-      supplier: activeModalProduct.dataset.supplier || 'Fournisseur',
       baseName: title,
       name: title + optionSuffix,
       optionLabel,
@@ -2642,32 +3173,31 @@ if (checkoutBtn) {
     }
 
     try {
-      const stripeItems = cart.map((item) => ({
+      // Correction : remplir la variable globale stripeItems
+      stripeItems = cart.map((item) => ({
         sku: item.stripeSku || item.sku,
         qty: item.qty
       }));
 
-      const result = await startStripeCheckout('/api/create-checkout-session', { items: stripeItems });
-      if (result.ok) return;
-    } catch (error) {
-      // Fallback simulation below
-    }
-
-    openStripePreview({
-      note: 'Stripe n\'est pas configuré sur ce poste. Voici un aperçu de checkout.',
-      lines: cart.map((item) => ({
-        label: item.name + ' x' + item.qty,
-        value: formatAmount(item.price * item.qty)
-      })),
-      total: formatAmount(getCartTotal()),
-      confirmLabel: 'Valider la commande (simulation)',
-      onConfirm: () => {
-        cart = [];
-        renderCart();
-        closeCart();
-        alert('Commande simulée validée. Aucun paiement réel n\'a été effectué.');
+      // Récupère les infos client comme dans le paiement classique
+      const details = getCustomerDetails ? getCustomerDetails() : {};
+      const payload = {
+        items: stripeItems,
+        clientName: details.customerName || '',
+        clientEmail: details.customerEmail || ''
+      };
+      const result = await createStripePaymentIntent(payload);
+      if (result.ok) {
+        const openResult = await openEmbeddedStripePayment({
+          clientSecret: result.clientSecret,
+          orderRef: result.orderRef
+        });
+        if (openResult.ok) return;
       }
-    });
+    } catch (error) {
+      // Plus de fallback simulation Stripe : paiement obligatoire
+      alert('Paiement impossible : Stripe n\'est pas configuré.');
+    }
   });
 }
 
@@ -2860,6 +3390,7 @@ reservationSlotModal?.addEventListener('click', (event) => {
 });
 
 if (reservationDayInput) {
+
   reservationDayInput.min = getMinReservationDateKey();
 }
 

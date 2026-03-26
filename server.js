@@ -29,6 +29,9 @@ const freeMobileUser = String(process.env.FREE_MOBILE_USER || '').trim();
 const freeMobilePass = String(process.env.FREE_MOBILE_PASS || '').trim();
 const smsSimulationEnabled = String(process.env.SMS_SIMULATION || '').trim().toLowerCase() === 'true';
 
+const supplierSimulationEnabled = String(process.env.SUPPLIER_SIMULATION || 'true').trim().toLowerCase() === 'true';
+const tatEuApiKey = String(process.env.TAT_EU_API_KEY || '').trim();
+
 const stripe = secretKey ? new Stripe(secretKey) : null;
 let twilioClient = null;
 let twilioClientDisabled = false;
@@ -37,6 +40,8 @@ const dataDir = path.join(__dirname, 'data');
 const productsFile = path.join(dataDir, 'products.json');
 const realisationsFile = path.join(dataDir, 'realisations.json');
 const scheduleFile = path.join(dataDir, 'schedule.json');
+const ordersFile = path.join(dataDir, 'orders.json');
+const webhookEventsFile = path.join(dataDir, 'webhook-events.json');
 const legacyAdminDataFile = path.join(dataDir, 'admin-content.json');
 
 let scheduleBookingLock = false;
@@ -138,6 +143,149 @@ function writeAdminContent(content) {
     featuredRealisations: asArray(content.featuredRealisations),
     scheduleEntries: asArray(content.scheduleEntries)
   };
+}
+
+function readOrdersData() {
+  ensureDataDir();
+  const parsed = readJsonFileSafe(ordersFile, { orders: [] });
+  return { orders: asArray(parsed.orders) };
+}
+
+function writeOrdersData(data) {
+  ensureDataDir();
+  const payload = { orders: asArray(data?.orders) };
+  fs.writeFileSync(ordersFile, JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+function readWebhookEventsData() {
+  ensureDataDir();
+  const parsed = readJsonFileSafe(webhookEventsFile, { processedEventIds: [] });
+  return {
+    processedEventIds: asArray(parsed.processedEventIds)
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  };
+}
+
+function writeWebhookEventsData(data) {
+  ensureDataDir();
+  const uniqueIds = Array.from(new Set(
+    asArray(data?.processedEventIds)
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  ));
+  const payload = {
+    processedEventIds: uniqueIds.slice(-5000)
+  };
+  fs.writeFileSync(webhookEventsFile, JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+function normalizeOrderStatus(value) {
+  const key = String(value || '').trim().toLowerCase();
+  if (key === 'paid' || key === 'paye' || key === 'payee') return 'paid';
+  if (key === 'processing' || key === 'preparation') return 'processing';
+  if (key === 'fulfilled' || key === 'expediee' || key === 'expedie') return 'fulfilled';
+  if (key === 'delivered' || key === 'livree' || key === 'livre') return 'delivered';
+  if (key === 'refunded' || key === 'remboursee' || key === 'rembourse') return 'refunded';
+  if (key === 'canceled' || key === 'cancelled' || key === 'annulee' || key === 'annule') return 'canceled';
+  return 'paid';
+}
+
+function upsertShopOrderFromSession(session, metadata, itemsLabel) {
+  const store = readOrdersData();
+  const nowIso = new Date().toISOString();
+  const stripeSessionId = String(session.id || '').trim();
+  const orderRef = String(metadata.orderRef || '').trim() || ('CMD-' + Date.now().toString(36).toUpperCase());
+  if (!stripeSessionId) return null;
+
+  const index = store.orders.findIndex((order) => {
+    const bySession = String(order.stripeSessionId || '') === stripeSessionId;
+    const byRef = orderRef && String(order.orderRef || '') === orderRef;
+    return bySession || byRef;
+  });
+  const order = {
+    id: index >= 0 ? String(store.orders[index].id || ('ord-' + Date.now().toString(36))) : ('ord-' + Date.now().toString(36)),
+    orderRef,
+    stripeSessionId,
+    stripePaymentIntentId: index >= 0 ? String(store.orders[index].stripePaymentIntentId || '').trim() : '',
+    status: normalizeOrderStatus(index >= 0 ? store.orders[index].status : 'paid'),
+    customerName: String(session.customer_details?.name || metadata.clientName || '').trim() || 'Non renseigne',
+    customerEmail: String(session.customer_details?.email || '').trim(),
+    amountTotal: Number(session.amount_total || 0),
+    currency: String(session.currency || 'eur').trim().toLowerCase(),
+    itemsLabel: String(itemsLabel || metadata.items || '').trim(),
+    suppliers: String(metadata.suppliers || '').trim(),
+    shippingSummary: String(metadata.shippingSummary || '').trim(),
+    skuLines: String(metadata.skuLines || '').trim(),
+    dispatchStatus: index >= 0 ? String(store.orders[index].dispatchStatus || 'pending') : 'pending',
+    supplierProvider: index >= 0 ? String(store.orders[index].supplierProvider || '').trim() : '',
+    supplierOrderId: index >= 0 ? String(store.orders[index].supplierOrderId || '').trim() : '',
+    dispatchMessage: index >= 0 ? String(store.orders[index].dispatchMessage || '').trim() : '',
+    dispatchedAt: index >= 0 ? String(store.orders[index].dispatchedAt || '').trim() : '',
+    trackingNumber: index >= 0 ? String(store.orders[index].trackingNumber || '').trim() : '',
+    adminNote: index >= 0 ? String(store.orders[index].adminNote || '').trim() : '',
+    createdAt: index >= 0 ? String(store.orders[index].createdAt || nowIso) : nowIso,
+    updatedAt: nowIso
+  };
+
+  if (index >= 0) {
+    store.orders[index] = { ...store.orders[index], ...order };
+  } else {
+    store.orders.push(order);
+  }
+
+  writeOrdersData(store);
+  return order;
+}
+
+function upsertShopOrderFromPaymentIntent(paymentIntent, metadata, itemsLabel, customerName, customerEmail) {
+  const store = readOrdersData();
+  const nowIso = new Date().toISOString();
+  const paymentIntentId = String(paymentIntent.id || '').trim();
+  const orderRef = String(metadata.orderRef || '').trim() || ('CMD-' + Date.now().toString(36).toUpperCase());
+  if (!paymentIntentId) return null;
+
+  const index = store.orders.findIndex((order) => {
+    const byPi = String(order.stripePaymentIntentId || '') === paymentIntentId;
+    const byRef = orderRef && String(order.orderRef || '') === orderRef;
+    return byPi || byRef;
+  });
+
+  const order = {
+    id: index >= 0 ? String(store.orders[index].id || ('ord-' + Date.now().toString(36))) : ('ord-' + Date.now().toString(36)),
+    orderRef,
+    stripeSessionId: index >= 0 ? String(store.orders[index].stripeSessionId || '').trim() : '',
+    stripePaymentIntentId: paymentIntentId,
+    status: normalizeOrderStatus(index >= 0 ? store.orders[index].status : 'paid'),
+    customerName: String(customerName || '').trim() || 'Non renseigne',
+    customerEmail: String(customerEmail || '').trim(),
+    amountTotal: Number(paymentIntent.amount || 0),
+    currency: String(paymentIntent.currency || 'eur').trim().toLowerCase(),
+    itemsLabel: String(itemsLabel || metadata.items || '').trim(),
+    suppliers: String(metadata.suppliers || '').trim(),
+    shippingSummary: String(metadata.shippingSummary || '').trim(),
+    skuLines: String(metadata.skuLines || '').trim(),
+    dispatchStatus: index >= 0 ? String(store.orders[index].dispatchStatus || 'pending') : 'pending',
+    supplierProvider: index >= 0 ? String(store.orders[index].supplierProvider || '').trim() : '',
+    supplierOrderId: index >= 0 ? String(store.orders[index].supplierOrderId || '').trim() : '',
+    dispatchMessage: index >= 0 ? String(store.orders[index].dispatchMessage || '').trim() : '',
+    dispatchedAt: index >= 0 ? String(store.orders[index].dispatchedAt || '').trim() : '',
+    trackingNumber: index >= 0 ? String(store.orders[index].trackingNumber || '').trim() : '',
+    adminNote: index >= 0 ? String(store.orders[index].adminNote || '').trim() : '',
+    createdAt: index >= 0 ? String(store.orders[index].createdAt || nowIso) : nowIso,
+    updatedAt: nowIso
+  };
+
+  if (index >= 0) {
+    store.orders[index] = { ...store.orders[index], ...order };
+  } else {
+    store.orders.push(order);
+  }
+
+  writeOrdersData(store);
+  return order;
 }
 
 function requireAdmin(req, res, next) {
@@ -397,16 +545,144 @@ async function sendOwnerNotification(subject, lines) {
 }
 
 const catalog = {
-  'FLASH-GEO-V3': { name: 'Flash Sheet - Geo Vol.3', amount: 2800, currency: 'eur' },
-  'SOIN-GEL-50': { name: 'Gel cicatrisant', amount: 2200, currency: 'eur' },
-  'FLASH-SERPENTS': { name: 'Flash Sheet - Serpents', amount: 1500, currency: 'eur' },
-  'NOTEBOOK-CHIINO': { name: 'Carnet de croquis - Chiino', amount: 1200, currency: 'eur' },
-  'TSHIRT-CHIINO': { name: 'T-shirt - Logo Chiino', amount: 3600, currency: 'eur' }
+  'FLASH-GEO-V3': { name: 'Crème réparatrice', amount: 2800, currency: 'eur', supplier: 'TAT-EU', supplierSku: 'FLASH-GEO-V3', shipping: '3-6 jours ouvres' },
+  'SOIN-GEL-50': { name: 'Gel cicatrisant', amount: 2200, currency: 'eur', supplier: 'TAT-EU', supplierSku: 'SOIN-GEL-50', shipping: '3-6 jours ouvres' },
+  'FLASH-SERPENTS': { name: 'Flash Tattoo', amount: 1500, currency: 'eur', supplier: 'TAT-EU', supplierSku: 'FLASH-SERPENTS', shipping: '3-6 jours ouvres' },
+  'NOTEBOOK-CHIINO': { name: 'Carnet de croquis - Chiino', amount: 1200, currency: 'eur', supplier: 'TAT-EU', supplierSku: 'NOTEBOOK-CHIINO', shipping: '3-6 jours ouvres' },
+  'TSHIRT-CHIINO': { name: 'T-shirt - Logo Chiino', amount: 3600, currency: 'eur', supplier: 'TAT-EU', supplierSku: 'TSHIRT-CHIINO', shipping: '3-6 jours ouvres' }
 };
 
-app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+function parseSkuLines(rawSkuLines) {
+  return String(rawSkuLines || '')
+    .split('|')
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const parts = chunk.split('x');
+      const sku = String(parts[0] || '').trim();
+      const qty = Math.max(1, Math.min(20, Number(parts[1] || 1)));
+      return { sku, qty };
+    })
+    .filter((item) => item.sku && Number.isFinite(item.qty));
+}
+
+function getSupplierToken(providerName) {
+  const key = String(providerName || '').toLowerCase().trim();
+  if (key === 'tat-eu' || key === 'tateu' || key === 'tat_eu') return tatEuApiKey;
+  return '';
+}
+
+function supplierToEnvSuffix(providerName) {
+  return String(providerName || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+async function sendSupplierOrder(order) {
+  const skuItems = parseSkuLines(order.skuLines);
+  const providers = Array.from(new Set(
+    skuItems
+      .map((item) => catalog[item.sku]?.supplier)
+      .filter(Boolean)
+  ));
+
+  if (!providers.length) {
+    return { ok: false, dispatchStatus: 'failed', message: 'Aucun fournisseur déterminé', provider: '', supplierOrderId: '' };
+  }
+
+  const provider = providers[0];
+  const payload = {
+    orderRef: order.orderRef,
+    stripeSessionId: order.stripeSessionId,
+    customerName: order.customerName,
+    customerEmail: order.customerEmail,
+    items: skuItems.map((item) => ({
+      sku: item.sku,
+      supplierSku: catalog[item.sku]?.supplierSku || item.sku,
+      qty: item.qty
+    }))
+  };
+
+  if (supplierSimulationEnabled) {
+    return {
+      ok: true,
+      dispatchStatus: 'sent',
+      provider,
+      supplierOrderId: 'SIM-' + Date.now().toString(36).toUpperCase(),
+      message: 'Commande fournisseur simulée'
+    };
+  }
+
+  const token = getSupplierToken(provider);
+  if (!token) {
+    return { ok: false, dispatchStatus: 'failed', message: `Token API manquant pour ${provider}`, provider, supplierOrderId: '' };
+  }
+
+  // Endpoint générique: remplacez SUPPLIER_DISPATCH_URL_* par vos endpoints réels fournisseur.
+  const providerEnvKey = 'SUPPLIER_DISPATCH_URL_' + supplierToEnvSuffix(provider);
+  const dispatchUrl = String(process.env[providerEnvKey] || '').trim();
+  if (!dispatchUrl) {
+    return { ok: false, dispatchStatus: 'failed', message: `Endpoint manquant (${providerEnvKey})`, provider, supplierOrderId: '' };
+  }
+
+  const response = await fetch(dispatchUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const reason = await response.text().catch(() => 'dispatch-error');
+    return { ok: false, dispatchStatus: 'failed', message: reason.slice(0, 240), provider, supplierOrderId: '' };
+  }
+
+  const data = await response.json().catch(() => ({}));
+  return {
+    ok: true,
+    dispatchStatus: 'sent',
+    provider,
+    supplierOrderId: String(data.orderId || data.id || ('EXT-' + Date.now().toString(36).toUpperCase())),
+    message: 'Commande fournisseur créée'
+  };
+}
+
+async function dispatchOrderToSupplierById(orderId) {
+  const store = readOrdersData();
+  const index = store.orders.findIndex((order) => String(order.id || '').trim() === String(orderId || '').trim());
+  if (index === -1) {
+    return { ok: false, error: 'order-not-found' };
+  }
+
+  const current = store.orders[index];
+  if (String(current.dispatchStatus || '') === 'sent' && String(current.supplierOrderId || '').trim()) {
+    return { ok: true, alreadySent: true, order: current };
+  }
+
+  const result = await sendSupplierOrder(current);
+  const updated = {
+    ...current,
+    dispatchStatus: result.dispatchStatus,
+    supplierProvider: result.provider || current.supplierProvider || '',
+    supplierOrderId: result.supplierOrderId || current.supplierOrderId || '',
+    dispatchMessage: String(result.message || '').trim(),
+    dispatchedAt: result.ok ? new Date().toISOString() : (current.dispatchedAt || ''),
+    updatedAt: new Date().toISOString()
+  };
+
+  store.orders[index] = updated;
+  writeOrdersData(store);
+  return { ok: Boolean(result.ok), order: updated, error: result.ok ? '' : 'dispatch-failed' };
+}
+
+app.post('/api/:webhookPath(webhook|stripe-webhook)', express.raw({ type: 'application/json' }), async (req, res) => {
+  console.log('[stripe-webhook] Reçu webhook Stripe:', req.method, req.originalUrl);
   if (!stripe || !webhookSecret) {
-    return res.status(400).send('Stripe webhook not configured');
+    console.error('[stripe-webhook] Stripe ou webhookSecret non configuré');
+    return res.status(400).send('Stripe webhook not configuré');
   }
 
   const signature = req.headers['stripe-signature'];
@@ -414,59 +690,145 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 
   try {
     event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
+    console.log('[stripe-webhook] Event Stripe reçu:', event.type, event.id);
   } catch (err) {
+    console.error('[stripe-webhook] Erreur de vérification Stripe:', err.message);
     return res.status(400).send(`Webhook error: ${err.message}`);
   }
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    console.log('[stripe] checkout.session.completed', session.id);
-
-    const metadata = session.metadata || {};
-    const orderType = String(metadata.orderType || '').trim();
-    const amountLabel = formatAmount(session.amount_total, session.currency);
-    const customerName = String(session.customer_details?.name || metadata.clientName || '').trim() || 'Non renseigné';
-    const customerEmail = String(session.customer_details?.email || '').trim() || 'Non renseigné';
-
-    if (orderType === 'shop') {
-      let itemsLabel = String(metadata.items || '').trim();
-      if (!itemsLabel && stripe) {
-        try {
-          const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 20 });
-          itemsLabel = asArray(lineItems.data)
-            .map((item) => {
-              const qty = Number(item.quantity || 1);
-              const label = String(item.description || 'Produit').trim();
-              return `${label} x${qty}`;
-            })
-            .join(', ');
-        } catch (error) {
-          // Si Stripe refuse le détail des lignes, on envoie quand même la notification.
-        }
-      }
-
-      await sendOwnerNotification('Nouvel achat boutique', [
-        `Session: ${session.id}`,
-        `Montant: ${amountLabel}`,
-        `Client: ${customerName}`,
-        `Email Stripe: ${customerEmail}`,
-        `Produits: ${itemsLabel || 'Non disponible'}`
-      ]);
-    }
-
-    if (orderType === 'reservation_deposit') {
-      await sendOwnerNotification('Acompte réservation payé', [
-        `Session: ${session.id}`,
-        `Montant: ${amountLabel}`,
-        `Client: ${customerName}`,
-        `Téléphone: ${String(metadata.clientPhone || '').trim() || 'Non renseigné'}`,
-        `Jour: ${String(metadata.selectedDate || '').trim() || 'Non renseigné'}`,
-        `Moment: ${String(metadata.selectedPeriod || '').trim() || 'Non renseigné'}`,
-        `Réservation: ${String(metadata.reservationId || '').trim() || 'Non renseigné'}`
-      ]);
-    }
+  const webhookStore = readWebhookEventsData();
+  const eventId = String(event.id || '').trim();
+  if (eventId && webhookStore.processedEventIds.includes(eventId)) {
+    console.warn('[stripe-webhook] Event déjà traité:', eventId);
+    return res.json({ received: true, duplicate: true });
   }
 
+  try {
+    console.log('[stripe-webhook] Traitement event:', event.type);
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      console.log('[stripe] checkout.session.completed', session.id);
+
+      const metadata = session.metadata || {};
+      const orderType = String(metadata.orderType || '').trim();
+      const amountLabel = formatAmount(session.amount_total, session.currency);
+      const customerName = String(session.customer_details?.name || metadata.clientName || '').trim() || 'Non renseigné';
+      const customerEmail = String(session.customer_details?.email || '').trim() || 'Non renseigné';
+
+      if (orderType === 'shop') {
+        let itemsLabel = String(metadata.items || '').trim();
+        if (!itemsLabel && stripe) {
+          try {
+            const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 20 });
+            itemsLabel = asArray(lineItems.data)
+              .map((item) => {
+                const qty = Number(item.quantity || 1);
+                const label = String(item.description || 'Produit').trim();
+                return `${label} x${qty}`;
+              })
+              .join(', ');
+          } catch (error) {
+            // Si Stripe refuse le détail des lignes, on envoie quand même la notification.
+          }
+        }
+
+        const order = upsertShopOrderFromSession(session, metadata, itemsLabel);
+
+        await sendOwnerNotification('Nouvel achat boutique', [
+          `Session: ${session.id}`,
+          `Commande: ${order?.orderRef || order?.id || 'Non disponible'}`,
+          `Montant: ${amountLabel}`,
+          `Client: ${customerName}`,
+          `Email Stripe: ${customerEmail}`,
+          `Produits: ${itemsLabel || 'Non disponible'}`,
+          `Fournisseurs: ${String(metadata.suppliers || '').trim() || 'Non disponible'}`,
+          `Delais expedition: ${String(metadata.shippingSummary || '').trim() || 'Non disponible'}`,
+          'Action requise: envoi manuel vers TAT-EU depuis le back-office.'
+        ]);
+      }
+
+      if (orderType === 'reservation_deposit') {
+        await sendOwnerNotification('Acompte réservation payé', [
+          `Session: ${session.id}`,
+          `Montant: ${amountLabel}`,
+          `Client: ${customerName}`,
+          `Téléphone: ${String(metadata.clientPhone || '').trim() || 'Non renseigné'}`,
+          `Jour: ${String(metadata.selectedDate || '').trim() || 'Non renseigné'}`,
+          `Moment: ${String(metadata.selectedPeriod || '').trim() || 'Non renseigné'}`,
+          `Réservation: ${String(metadata.reservationId || '').trim() || 'Non renseigné'}`
+        ]);
+      }
+    }
+
+    if (event.type === 'payment_intent.succeeded') {
+      const paymentIntent = event.data.object;
+      const metadata = paymentIntent.metadata || {};
+      const orderType = String(metadata.orderType || '').trim();
+
+      if (orderType === 'shop') {
+        const charge = Array.isArray(paymentIntent.charges?.data) ? paymentIntent.charges.data[0] : null;
+        console.log('[stripe-webhook][debug] paymentIntent:', JSON.stringify(paymentIntent, null, 2));
+        console.log('[stripe-webhook][debug] charge:', JSON.stringify(charge, null, 2));
+        // Correction : récupération robuste du nom et email client
+        const customerName = String(
+          paymentIntent.metadata?.clientName ||
+          paymentIntent.shipping?.name ||
+          paymentIntent.billing_details?.name ||
+          (charge?.billing_details?.name) ||
+          ''
+        ).trim() || 'Non renseigné';
+        const customerEmail = String(
+          paymentIntent.metadata?.clientEmail ||
+          paymentIntent.shipping?.email ||
+          paymentIntent.billing_details?.email ||
+          (charge?.billing_details?.email) ||
+          ''
+        ).trim() || 'Non renseigné';
+        const amountLabel = formatAmount(paymentIntent.amount, paymentIntent.currency);
+        const itemsLabel = String(metadata.items || '').trim();
+
+        const order = upsertShopOrderFromPaymentIntent(paymentIntent, metadata, itemsLabel, customerName, customerEmail);
+
+        await sendOwnerNotification('Nouvel achat boutique', [
+          `Paiement: ${paymentIntent.id}`,
+          `Commande: ${order?.orderRef || order?.id || 'Non disponible'}`,
+          `Montant: ${amountLabel}`,
+          `Client: ${customerName}`,
+          `Email Stripe: ${customerEmail}`,
+          `Produits: ${itemsLabel || 'Non disponible'}`,
+          `Fournisseurs: ${String(metadata.suppliers || '').trim() || 'Non disponible'}`,
+          `Delais expedition: ${String(metadata.shippingSummary || '').trim() || 'Non disponible'}`,
+          'Action requise: envoi manuel vers TAT-EU depuis le back-office.'
+        ]);
+
+        // Envoi d'un email de confirmation au client
+        try {
+          const { sendMail } = require('./scripts/sendMail');
+          if (customerEmail && customerEmail !== 'Non renseigné') {
+            await sendMail({
+              to: customerEmail,
+              subject: `Confirmation de votre commande ${order?.orderRef || ''}`,
+              text: `Bonjour ${customerName},\n\nNous avons bien reçu votre commande sur Chiino.\n\nMontant : ${amountLabel}\nProduits : ${itemsLabel || 'Non disponible'}\n\nMerci pour votre confiance !\n\nL’équipe Chiino`,
+              html: `<p>Bonjour ${customerName},</p><p>Nous avons bien reçu votre commande sur <b>Chiino</b>.</p><ul><li><b>Montant&nbsp;:</b> ${amountLabel}</li><li><b>Produits&nbsp;:</b> ${itemsLabel || 'Non disponible'}</li></ul><p>Merci pour votre confiance&nbsp;!<br>L’équipe Chiino</p>`
+            });
+          }
+        } catch (err) {
+          console.error('[mail] Erreur envoi confirmation client :', err.message);
+        }
+      }
+    }
+
+    if (eventId) {
+      webhookStore.processedEventIds.push(eventId);
+      writeWebhookEventsData(webhookStore);
+    }
+  } catch (error) {
+    console.error('[stripe-webhook] Erreur lors du traitement du webhook:', error.message);
+    return res.status(500).send(`Webhook processing error: ${error.message || 'unknown-error'}`);
+  }
+
+  console.log('[stripe-webhook] Webhook traité avec succès.');
   return res.json({ received: true });
 });
 
@@ -480,11 +842,7 @@ app.use('/api/admin/login', loginLimiter);
 app.use('/api/contact-message', publicLimiter);
 app.use('/api/create-deposit-session', publicLimiter);
 
-const BLOCKED_PATHS = ['/server.js', '/package.json', '/package-lock.json', '/Dockerfile', '/fly.toml', '/.env'];
-BLOCKED_PATHS.forEach((p) => app.get(p, (_req, res) => res.status(403).end()));
-app.use('/data', (_req, res) => res.status(403).end());
-
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/public-config', (req, res) => {
   res.json({ publishableKey });
@@ -559,6 +917,55 @@ app.get('/api/admin/content', requireAdmin, (_req, res) => {
   return res.json(readAdminContent());
 });
 
+app.get('/api/admin/orders', requireAdmin, (_req, res) => {
+  const data = readOrdersData();
+  const orders = data.orders
+    .slice()
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  return res.json({ orders });
+});
+
+app.put('/api/admin/orders/:id/status', requireAdmin, (req, res) => {
+  const id = String(req.params.id || '').trim();
+  const body = req.body || {};
+  const status = normalizeOrderStatus(body.status);
+  const trackingNumber = String(body.trackingNumber || '').trim();
+  const adminNote = String(body.adminNote || '').trim();
+
+  const data = readOrdersData();
+  const index = data.orders.findIndex((order) => String(order.id || '') === id);
+  if (index === -1) {
+    return res.status(404).json({ error: 'Commande introuvable' });
+  }
+
+  const previous = data.orders[index];
+  const dispatchStatus = String(previous.dispatchStatus || '').trim().toLowerCase();
+  const requiresDispatch = status === 'fulfilled' || status === 'delivered';
+  if (requiresDispatch && dispatchStatus !== 'sent') {
+    return res.status(400).json({ error: 'Impossible de passer en expediée/livrée avant envoi manuel a TAT-EU.' });
+  }
+
+  data.orders[index] = {
+    ...previous,
+    status,
+    trackingNumber,
+    adminNote,
+    updatedAt: new Date().toISOString()
+  };
+
+  writeOrdersData(data);
+  return res.json({ order: data.orders[index] });
+});
+
+app.post('/api/admin/orders/:id/dispatch', requireAdmin, async (req, res) => {
+  const id = String(req.params.id || '').trim();
+  const result = await dispatchOrderToSupplierById(id);
+  if (!result.ok && !result.alreadySent) {
+    return res.status(400).json({ error: 'Envoi fournisseur impossible', order: result.order || null });
+  }
+  return res.json({ ok: true, alreadySent: Boolean(result.alreadySent), order: result.order || null });
+});
+
 app.post('/api/admin/products', requireAdmin, (req, res) => {
   const body = req.body || {};
   const name = String(body.name || '').trim();
@@ -571,7 +978,8 @@ app.post('/api/admin/products', requireAdmin, (req, res) => {
   const product = {
     id: 'prod-' + Date.now().toString(36),
     sku: String(body.sku || 'CUSTOM-' + Date.now().toString(36)),
-    supplier: String(body.supplier || 'Back-office'),
+    supplier: String(body.supplier || 'Partenaire'),
+    shipping: String(body.shipping || '5-10 jours ouvres'),
     name,
     shortDesc: String(body.shortDesc || '').trim(),
     details: String(body.details || name).trim(),
@@ -613,6 +1021,8 @@ app.put('/api/admin/products/:id', requireAdmin, (req, res) => {
   const previous = content.customProducts[index];
   content.customProducts[index] = {
     ...previous,
+    supplier: String(body.supplier || previous.supplier || 'Partenaire'),
+    shipping: String(body.shipping || previous.shipping || '5-10 jours ouvres'),
     name,
     shortDesc: String(body.shortDesc || '').trim(),
     details: String(body.details || name).trim(),
@@ -696,6 +1106,8 @@ app.put('/api/admin/default-products/:id', requireAdmin, (req, res) => {
 
   content.defaultProductOverrides[id] = {
     name: String(body.name || '').trim(),
+    supplier: String(body.supplier || '').trim(),
+    shipping: String(body.shipping || '').trim(),
     shortDesc: String(body.shortDesc || '').trim(),
     details: String(body.details || '').trim(),
     price: Number.isFinite(Number(body.price)) ? Number(body.price) : null,
@@ -846,6 +1258,10 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
   const lineItems = [];
   const metadataItems = [];
+  const metadataSkuLines = [];
+  const metadataSuppliers = [];
+  const metadataShipping = [];
+  const orderRef = 'CMD-' + Date.now().toString(36).toUpperCase();
 
   for (const item of items) {
     const sku = String(item.sku || '').trim();
@@ -866,16 +1282,30 @@ app.post('/api/create-checkout-session', async (req, res) => {
     });
 
     metadataItems.push(`${product.name} x${qty}`);
+    metadataSkuLines.push(`${sku}x${qty}`);
+    if (product.supplier) metadataSuppliers.push(product.supplier);
+    if (product.shipping) metadataShipping.push(product.shipping);
   }
+
+  const incomingSuppliers = String(req.body?.supplierSummary || '').trim();
+  const incomingShippingSummary = String(req.body?.shippingSummary || '').trim();
+  const computedSuppliers = Array.from(new Set(metadataSuppliers)).join(', ');
+  const computedShipping = Array.from(new Set(metadataShipping)).join(', ');
+  const metadataSuppliersLabel = (incomingSuppliers || computedSuppliers).slice(0, 500);
+  const metadataShippingLabel = (incomingShippingSummary || computedShipping).slice(0, 500);
 
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'paypal'],
       line_items: lineItems,
       metadata: {
         orderType: 'shop',
-        items: metadataItems.join(', ').slice(0, 500)
+        orderRef,
+        items: metadataItems.join(', ').slice(0, 500),
+        skuLines: metadataSkuLines.join('|').slice(0, 500),
+        suppliers: metadataSuppliersLabel,
+        shippingSummary: metadataShippingLabel
       },
       success_url: `${publicUrl}/boutique.html?checkout=success`,
       cancel_url: `${publicUrl}/boutique.html?checkout=cancel`
@@ -884,6 +1314,83 @@ app.post('/api/create-checkout-session', async (req, res) => {
     return res.json({ sessionId: session.id });
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Stripe session creation failed' });
+  }
+});
+
+app.post('/api/create-payment-intent', async (req, res) => {
+    // Log pour debug : vérifier l'email client reçu
+    console.log('[Paiement] Email reçu du front:', req.body.clientEmail);
+    // Log complet du body reçu
+    console.log('[Paiement] req.body complet:', JSON.stringify(req.body));
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe secret key is missing on server' });
+  }
+
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!items.length) {
+    return res.status(400).json({ error: 'Cart is empty' });
+  }
+
+  let amount = 0;
+  const metadataItems = [];
+  const metadataSkuLines = [];
+  const metadataSuppliers = [];
+  const metadataShipping = [];
+  const orderRef = 'CMD-' + Date.now().toString(36).toUpperCase();
+
+  for (const item of items) {
+    const sku = String(item.sku || '').trim();
+    const qty = Math.max(1, Math.min(20, Number(item.qty || 1)));
+    const product = catalog[sku];
+
+    if (!product) {
+      return res.status(400).json({ error: `Unknown SKU: ${sku}` });
+    }
+
+    amount += Number(product.amount || 0) * qty;
+    metadataItems.push(`${product.name} x${qty}`);
+    metadataSkuLines.push(`${sku}x${qty}`);
+    if (product.supplier) metadataSuppliers.push(product.supplier);
+    if (product.shipping) metadataShipping.push(product.shipping);
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'Invalid amount' });
+  }
+
+  const incomingSuppliers = String(req.body?.supplierSummary || '').trim();
+  const incomingShippingSummary = String(req.body?.shippingSummary || '').trim();
+  const computedSuppliers = Array.from(new Set(metadataSuppliers)).join(', ');
+  const computedShipping = Array.from(new Set(metadataShipping)).join(', ');
+  const metadataSuppliersLabel = (incomingSuppliers || computedSuppliers).slice(0, 500);
+  const metadataShippingLabel = (incomingShippingSummary || computedShipping).slice(0, 500);
+
+  try {
+    const metadata = {
+      orderType: 'shop',
+      orderRef,
+      items: metadataItems.join(', ').slice(0, 500),
+      skuLines: metadataSkuLines.join('|').slice(0, 500),
+      suppliers: metadataSuppliersLabel,
+      shippingSummary: metadataShippingLabel,
+      clientName: String(req.body.clientName || '').slice(0, 100),
+      clientEmail: String(req.body.clientEmail || '').slice(0, 100)
+    };
+    console.log('[Paiement] metadata envoyé à Stripe:', JSON.stringify(metadata));
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency: 'eur',
+      payment_method_types: ['card', 'paypal'],
+      metadata
+    });
+
+    return res.json({
+      clientSecret: paymentIntent.client_secret,
+      orderRef,
+      amount
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Stripe payment intent creation failed' });
   }
 });
 
@@ -970,7 +1477,7 @@ app.post('/api/create-deposit-session', async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'paypal'],
       line_items: [
         {
           quantity: 1,

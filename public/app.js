@@ -611,7 +611,7 @@ function buildCustomProductCard(item) {
   } else {
     const price = document.createElement('span');
     price.className = 'price';
-    price.textContent = Number(item.price || 0).toFixed(2).replace('.', ',') + '€';
+    price.textContent = Number(item.price).toFixed(2).replace('.', ',') + '€';
     footer.appendChild(price);
   }
 
@@ -3195,24 +3195,9 @@ if (checkoutBtn) {
         if (openResult.ok) return;
       }
     } catch (error) {
-      // Fallback simulation below
+      // Plus de fallback simulation Stripe : paiement obligatoire
+      alert('Paiement impossible : Stripe n\'est pas configuré.');
     }
-
-    openStripePreview({
-      note: 'Stripe n\'est pas configuré sur ce poste. Voici un aperçu de checkout.',
-      lines: cart.map((item) => ({
-        label: item.name + ' x' + item.qty,
-        value: formatAmount(item.price * item.qty)
-      })),
-      total: formatAmount(getCartTotal()),
-      confirmLabel: 'Valider la commande (simulation)',
-      onConfirm: () => {
-        cart = [];
-        renderCart();
-        closeCart();
-        alert('Commande simulée validée. Aucun paiement réel n\'a été effectué.');
-      }
-    });
   });
 }
 
@@ -3405,6 +3390,7 @@ reservationSlotModal?.addEventListener('click', (event) => {
 });
 
 if (reservationDayInput) {
+
   reservationDayInput.min = getMinReservationDateKey();
 }
 
@@ -3477,49 +3463,3 @@ initDynamicContent().catch(() => {
 initAdminBackoffice();
 loadReservationAvailability();
 initContactForm();
-
-// Fonction de secours : ferme toutes les modales et réactive le scroll
-function resetUI() {
-  // Lightbox
-  if (typeof closeLightbox === 'function') closeLightbox();
-  if (lightbox) {
-    lightbox.classList.remove('open');
-    lightbox.setAttribute('aria-hidden', 'true');
-  }
-  // Stripe preview
-  const stripePreview = document.getElementById('stripe-preview');
-  if (stripePreview) {
-    stripePreview.classList.remove('open');
-    stripePreview.setAttribute('aria-hidden', 'true');
-  }
-  // Stripe embedded
-  const stripeEmbedded = document.getElementById('stripe-embedded-payment');
-  if (stripeEmbedded) {
-    stripeEmbedded.classList.remove('open');
-    stripeEmbedded.setAttribute('aria-hidden', 'true');
-  }
-  // Product modal
-  const productModal = document.getElementById('product-modal');
-  if (productModal) {
-    productModal.classList.remove('open');
-    productModal.setAttribute('aria-hidden', 'true');
-  }
-  // Reservation slot modal
-  const reservationSlotModal = document.getElementById('reservation-slot-modal');
-  if (reservationSlotModal) {
-    reservationSlotModal.classList.remove('open');
-    reservationSlotModal.setAttribute('aria-hidden', 'true');
-  }
-  // Réactive le scroll
-  document.body.style.overflow = '';
-}
-
-// Raccourci clavier F12 pour reset UI
-// Appuyer sur F12 ferme toutes les modales et réactive le scroll
-// (utile si l'UI est bloquée)
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'F12') {
-    resetUI();
-    alert('UI réinitialisée (toutes les modales fermées)');
-  }
-});

@@ -2705,6 +2705,8 @@ async function openEmbeddedStripePayment(options) {
     }
     if (errorEl) errorEl.textContent = '';
 
+    // Log pour debug : vérifier l'email transmis à Stripe
+    console.log('[Paiement] Email transmis à Stripe:', details.customerEmail);
     // On transmet le nom et l'email dans le PaymentIntent (metadata)
     const result = await createStripePaymentIntent({
       items: stripeItems,

@@ -809,8 +809,8 @@ app.post('/api/:webhookPath(webhook|stripe-webhook)', express.raw({ type: 'appli
             await sendMail({
               to: customerEmail,
               subject: `Confirmation de votre commande ${order?.orderRef || ''}`,
-              text: `Bonjour ${customerName},\n\nNous avons bien reçu votre commande sur Chiino.\n\nMontant : ${amountLabel}\nProduits : ${itemsLabel || 'Non disponible'}\n\nMerci pour votre confiance !\n\nL'équipe Chiino`,
-              html: `<p>Bonjour ${customerName},</p><p>Nous avons bien reçu votre commande sur <b>Chiino</b>.</p><ul><li><b>Montant :</b> ${amountLabel}</li><li><b>Produits :</b> ${itemsLabel || 'Non disponible'}</li></ul><p>Merci pour votre confiance !<br>L'équipe Chiino</p>`
+              text: `Bonjour ${customerName},\n\nNous avons bien reçu votre commande sur Chiino.\n\nMontant : ${amountLabel}\nProduits : ${itemsLabel || 'Non disponible'}\n\nMerci pour votre confiance !\n\nL’équipe Chiino`,
+              html: `<p>Bonjour ${customerName},</p><p>Nous avons bien reçu votre commande sur <b>Chiino</b>.</p><ul><li><b>Montant&nbsp;:</b> ${amountLabel}</li><li><b>Produits&nbsp;:</b> ${itemsLabel || 'Non disponible'}</li></ul><p>Merci pour votre confiance&nbsp;!<br>L’équipe Chiino</p>`
             });
           }
         } catch (err) {

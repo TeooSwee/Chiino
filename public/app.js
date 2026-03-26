@@ -2489,7 +2489,7 @@ function ensureShopPaymentDom() {
   modal.innerHTML =
     '<div class="stripe-embedded-card">' +
       '<div class="stripe-embedded-head">' +
-        '<strong>Paiement securise</strong>' +
+        '<strong>Paiement sécurisé <span style="color:#2196f3;font-size:1.2em;vertical-align:middle;">•</span></strong>' +
         '<button id="stripe-embedded-close" class="stripe-embedded-close" aria-label="Fermer">x</button>' +
       '</div>' +
       '<div class="stripe-embedded-body">' +

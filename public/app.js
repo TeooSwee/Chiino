@@ -2311,6 +2311,8 @@ const reservationSlotHint = document.getElementById('reservation-slot-hint');
 const reservationSlotSelectedLabel = document.getElementById('reservation-slot-selected');
 
 let cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
+// Correction Stripe : rendre stripeItems global pour le paiement
+let stripeItems = [];
 let stripeClientPromise = null;
 let stripePreviewConfirmAction = null;
 let shopPaymentElements = null;
@@ -3169,7 +3171,8 @@ if (checkoutBtn) {
     }
 
     try {
-      const stripeItems = cart.map((item) => ({
+      // Correction : remplir la variable globale stripeItems
+      stripeItems = cart.map((item) => ({
         sku: item.stripeSku || item.sku,
         qty: item.qty
       }));

@@ -3180,8 +3180,14 @@ if (checkoutBtn) {
       }));
 
       const result = await createStripePaymentIntent({
-        items: stripeItems
-      });
+        // Récupère les infos client comme dans le paiement classique
+        const details = getCustomerDetails ? getCustomerDetails() : {};
+        const payload = {
+          items: stripeItems,
+          clientName: details.customerName || '',
+          clientEmail: details.customerEmail || ''
+        };
+        const result = await createStripePaymentIntent(payload);
       if (result.ok) {
         const openResult = await openEmbeddedStripePayment({
           clientSecret: result.clientSecret,

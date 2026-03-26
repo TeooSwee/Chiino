@@ -1320,6 +1320,8 @@ app.post('/api/create-checkout-session', async (req, res) => {
 app.post('/api/create-payment-intent', async (req, res) => {
     // Log pour debug : vérifier l'email client reçu
     console.log('[Paiement] Email reçu du front:', req.body.clientEmail);
+    // Log complet du body reçu
+    console.log('[Paiement] req.body complet:', JSON.stringify(req.body));
   if (!stripe) {
     return res.status(500).json({ error: 'Stripe secret key is missing on server' });
   }
@@ -1364,20 +1366,22 @@ app.post('/api/create-payment-intent', async (req, res) => {
   const metadataShippingLabel = (incomingShippingSummary || computedShipping).slice(0, 500);
 
   try {
+    const metadata = {
+      orderType: 'shop',
+      orderRef,
+      items: metadataItems.join(', ').slice(0, 500),
+      skuLines: metadataSkuLines.join('|').slice(0, 500),
+      suppliers: metadataSuppliersLabel,
+      shippingSummary: metadataShippingLabel,
+      clientName: String(req.body.clientName || '').slice(0, 100),
+      clientEmail: String(req.body.clientEmail || '').slice(0, 100)
+    };
+    console.log('[Paiement] metadata envoyé à Stripe:', JSON.stringify(metadata));
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: 'eur',
       payment_method_types: ['card', 'paypal'],
-      metadata: {
-        orderType: 'shop',
-        orderRef,
-        items: metadataItems.join(', ').slice(0, 500),
-        skuLines: metadataSkuLines.join('|').slice(0, 500),
-        suppliers: metadataSuppliersLabel,
-        shippingSummary: metadataShippingLabel,
-        clientName: String(req.body.clientName || '').slice(0, 100),
-        clientEmail: String(req.body.clientEmail || '').slice(0, 100)
-      }
+      metadata
     });
 
     return res.json({

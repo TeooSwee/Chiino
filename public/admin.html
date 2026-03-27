@@ -78,9 +78,23 @@
             <div class="fg"><label for="admin-product-short">Résumé court</label><input id="admin-product-short" type="text" placeholder="Ex: Hydratation de votre peau"></div>
             <div class="fg"><label for="admin-product-price">Prix actuel (€)</label><input id="admin-product-price" type="number" min="0" step="0.01" placeholder="Ex: 28"></div>
             <div class="fg full">
-              <label for="admin-product-variants">Formats & prix (1 par ligne, ex : 250ml;12)</label>
-              <textarea id="admin-product-variants" rows="3" placeholder="Format;Prix\nEx : 250ml;12\n500ml;18"></textarea>
-              <small>Pour chaque format, indiquez le nom et le prix séparés par un point-virgule (;). Exemple :<br>250ml;12<br>500ml;18</small>
+              <label>Formats & prix</label>
+              <div id="admin-product-variants-table-wrap">
+                <table id="admin-product-variants-table" class="admin-variants-table">
+                  <thead>
+                    <tr><th>Format</th><th>Prix (€)</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                  </tbody>
+                </table>
+                <div style="margin-top:8px;display:flex;gap:8px">
+                  <input id="admin-variant-label-input" type="text" placeholder="Format (ex: 250ml)" style="flex:2">
+                  <input id="admin-variant-price-input" type="number" min="0" step="0.01" placeholder="Prix" style="flex:1">
+                  <button id="admin-add-variant-btn" type="button" class="add-btn">Ajouter</button>
+                </div>
+                <small>Ajoutez plusieurs formats/prix pour ce produit. Exemple : 250ml à 12€, 500ml à 18€.</small>
+              </div>
+              <input id="admin-product-variants" type="hidden">
             </div>
             <div class="fg"><label for="admin-product-old-price">Ancien prix (€) optionnel</label><input id="admin-product-old-price" type="number" min="0" step="0.01" placeholder="Ex: 35"></div>
             <div class="fg"><label for="admin-product-category">Catégorie</label><select id="admin-product-category"><option value="modeles">Modèles</option><option value="soins">Soins</option><option value="vetements">Vêtements</option></select></div>

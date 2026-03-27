@@ -1214,7 +1214,77 @@ function initAdminBackoffice() {
   const productImageUrlInput = document.getElementById('admin-product-image-url');
   const productImageFileInput = document.getElementById('admin-product-image-file');
   // Ajout pour variantes (formats/prix)
-  const productVariantsInput = document.getElementById('admin-product-variants'); // textarea ou champ caché
+  const productVariantsInput = document.getElementById('admin-product-variants'); // champ caché
+  const variantsTableWrap = document.getElementById('admin-product-variants-table-wrap');
+  const variantsTable = document.getElementById('admin-product-variants-table');
+  const variantsTbody = variantsTable ? variantsTable.querySelector('tbody') : null;
+  const variantLabelInput = document.getElementById('admin-variant-label-input');
+  const variantPriceInput = document.getElementById('admin-variant-price-input');
+  const addVariantBtn = document.getElementById('admin-add-variant-btn');
+  let editingVariantIdx = null;
+  let variantsState = [];
+
+  function renderVariantsTable() {
+    if (!variantsTbody) return;
+    variantsTbody.innerHTML = '';
+    variantsState.forEach((variant, idx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" value="${variant.label}" data-idx="${idx}" class="variant-label-input" style="width:100%"></td>
+        <td><input type="number" min="0" step="0.01" value="${variant.price}" data-idx="${idx}" class="variant-price-input" style="width:80px"></td>
+        <td><button type="button" class="remove-variant-btn" data-idx="${idx}">🗑️</button></td>
+      `;
+      variantsTbody.appendChild(tr);
+    });
+    // Synchroniser le champ caché
+    if (productVariantsInput) {
+      productVariantsInput.value = variantsState.map(v => v.label + ';' + v.price).join('\n');
+    }
+  }
+
+  if (addVariantBtn && variantLabelInput && variantPriceInput) {
+    addVariantBtn.addEventListener('click', () => {
+      const label = variantLabelInput.value.trim();
+      const price = parseFloat(variantPriceInput.value.replace(',', '.'));
+      if (!label || !Number.isFinite(price) || price <= 0) return;
+      variantsState.push({ label, price });
+      variantLabelInput.value = '';
+      variantPriceInput.value = '';
+      renderVariantsTable();
+    });
+  }
+
+  if (variantsTbody) {
+    variantsTbody.addEventListener('click', (e) => {
+      if (e.target.classList.contains('remove-variant-btn')) {
+        const idx = Number(e.target.dataset.idx);
+        variantsState.splice(idx, 1);
+        renderVariantsTable();
+      }
+    });
+    variantsTbody.addEventListener('input', (e) => {
+      if (e.target.classList.contains('variant-label-input')) {
+        const idx = Number(e.target.dataset.idx);
+        variantsState[idx].label = e.target.value;
+        renderVariantsTable();
+      } else if (e.target.classList.contains('variant-price-input')) {
+        const idx = Number(e.target.dataset.idx);
+        variantsState[idx].price = parseFloat(e.target.value.replace(',', '.'));
+        renderVariantsTable();
+      }
+    });
+  }
+
+  function setVariantsStateFromString(str) {
+    variantsState = [];
+    if (str && str.trim()) {
+      variantsState = str.split('\n').map(line => {
+        const [label, price] = line.split(';').map(s => s.trim());
+        return label && price ? { label, price: Number(price.replace(',', '.')) } : null;
+      }).filter(Boolean);
+    }
+    renderVariantsTable();
+  }
 
   const realTitleInput = document.getElementById('admin-real-title');
   const realStyleInput = document.getElementById('admin-real-style');
@@ -1259,7 +1329,7 @@ function initAdminBackoffice() {
     if (productDetailsInput) productDetailsInput.value = '';
     if (productImageUrlInput) productImageUrlInput.value = '';
     if (productImageFileInput) productImageFileInput.value = '';
-    if (productVariantsInput) productVariantsInput.value = '';
+    setVariantsStateFromString('');
   };
 
   const resetRealForm = () => {
@@ -1562,14 +1632,7 @@ function initAdminBackoffice() {
     const imageUrl = productImageUrlInput?.value?.trim() || '';
     const imageFile = productImageFileInput?.files?.[0] || null;
     // Variantes (formats/prix)
-    let variants = [];
-    if (productVariantsInput && productVariantsInput.value.trim()) {
-      // Format attendu : une variante par ligne, séparateur ; ou ,
-      variants = productVariantsInput.value.split('\n').map(line => {
-        const [label, price] = line.split(';').map(s => s.trim());
-        return label && price ? { label, price: Number(price.replace(',', '.')) } : null;
-      }).filter(Boolean);
-    }
+    let variants = Array.isArray(variantsState) ? variantsState.filter(v => v.label && Number.isFinite(v.price) && v.price > 0) : [];
 
     const price = Number(priceRaw.replace(',', '.'));
     const oldPrice = Number(oldPriceRaw.replace(',', '.'));
@@ -2026,7 +2089,7 @@ function initAdminBackoffice() {
       if (productDetailsInput) productDetailsInput.value = item.details || '';
       if (productImageUrlInput) productImageUrlInput.value = item.imageSrc || '';
       if (productImageFileInput) productImageFileInput.value = '';
-      if (productVariantsInput) productVariantsInput.value = Array.isArray(item.variants) ? item.variants.map(v => v.label + ';' + v.price).join('\n') : '';
+      setVariantsStateFromString(Array.isArray(item.variants) ? item.variants.map(v => v.label + ';' + v.price).join('\n') : '');
       return;
     }
 

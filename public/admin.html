@@ -77,6 +77,11 @@
             <div class="fg full"><label for="admin-product-name">Nom du produit</label><input id="admin-product-name" type="text" placeholder="Ex: Crème réparatrice"></div>
             <div class="fg"><label for="admin-product-short">Résumé court</label><input id="admin-product-short" type="text" placeholder="Ex: Hydratation de votre peau"></div>
             <div class="fg"><label for="admin-product-price">Prix actuel (€)</label><input id="admin-product-price" type="number" min="0" step="0.01" placeholder="Ex: 28"></div>
+            <div class="fg full">
+              <label for="admin-product-variants">Formats & prix (1 par ligne, ex : 250ml;12)</label>
+              <textarea id="admin-product-variants" rows="3" placeholder="Format;Prix\nEx : 250ml;12\n500ml;18"></textarea>
+              <small>Pour chaque format, indiquez le nom et le prix séparés par un point-virgule (;). Exemple :<br>250ml;12<br>500ml;18</small>
+            </div>
             <div class="fg"><label for="admin-product-old-price">Ancien prix (€) optionnel</label><input id="admin-product-old-price" type="number" min="0" step="0.01" placeholder="Ex: 35"></div>
             <div class="fg"><label for="admin-product-category">Catégorie</label><select id="admin-product-category"><option value="modeles">Modèles</option><option value="soins">Soins</option><option value="vetements">Vêtements</option></select></div>
             <div class="fg"><label for="admin-product-badge">Badge optionnel</label><input id="admin-product-badge" type="text" placeholder="Ex: Nouveau / -20 %"></div>

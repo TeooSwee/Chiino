@@ -205,6 +205,17 @@ function upsertShopOrderFromSession(session, metadata, itemsLabel) {
     const byRef = orderRef && String(order.orderRef || '') === orderRef;
     return bySession || byRef;
   });
+  // Parse detailed items from skuLines and catalog
+  const skuItems = parseSkuLines(metadata.skuLines || '');
+  const items = skuItems.map(({ sku, qty }) => {
+    const product = catalog[sku] || {};
+    return {
+      label: product.name || sku,
+      sku,
+      quantity: qty,
+      unitPrice: Number(product.amount || 0) / 100
+    };
+  });
   const order = {
     id: index >= 0 ? String(store.orders[index].id || ('ord-' + Date.now().toString(36))) : ('ord-' + Date.now().toString(36)),
     orderRef,
@@ -213,12 +224,17 @@ function upsertShopOrderFromSession(session, metadata, itemsLabel) {
     status: normalizeOrderStatus(index >= 0 ? store.orders[index].status : 'paid'),
     customerName: String(session.customer_details?.name || metadata.clientName || '').trim() || 'Non renseigne',
     customerFirstName: String(metadata.clientFirstName || '').trim(),
+    customerLastName: String(metadata.clientLastName || '').trim(),
     customerAddress: String(metadata.clientAddress || '').trim(),
+    customerPostal: String(metadata.clientPostal || '').trim(),
+    customerCity: String(metadata.clientCity || '').trim(),
+    customerCountry: String(metadata.clientCountry || '').trim(),
     customerPhone: String(metadata.clientPhone || '').trim(),
     customerEmail: String(session.customer_details?.email || metadata.clientEmail || '').trim(),
     amountTotal: Number(session.amount_total || 0),
     currency: String(session.currency || 'eur').trim().toLowerCase(),
     itemsLabel: String(itemsLabel || metadata.items || '').trim(),
+    items,
     suppliers: String(metadata.suppliers || '').trim(),
     shippingSummary: String(metadata.shippingSummary || '').trim(),
     skuLines: String(metadata.skuLines || '').trim(),
@@ -256,6 +272,17 @@ function upsertShopOrderFromPaymentIntent(paymentIntent, metadata, itemsLabel, c
     return byPi || byRef;
   });
 
+  // Parse detailed items from skuLines and catalog
+  const skuItems = parseSkuLines(metadata.skuLines || '');
+  const items = skuItems.map(({ sku, qty }) => {
+    const product = catalog[sku] || {};
+    return {
+      label: product.name || sku,
+      sku,
+      quantity: qty,
+      unitPrice: Number(product.amount || 0) / 100
+    };
+  });
   const order = {
     id: index >= 0 ? String(store.orders[index].id || ('ord-' + Date.now().toString(36))) : ('ord-' + Date.now().toString(36)),
     orderRef,
@@ -264,12 +291,17 @@ function upsertShopOrderFromPaymentIntent(paymentIntent, metadata, itemsLabel, c
     status: normalizeOrderStatus(index >= 0 ? store.orders[index].status : 'paid'),
     customerName: String(customerName || '').trim() || 'Non renseigne',
     customerFirstName: String(metadata.clientFirstName || '').trim(),
+    customerLastName: String(metadata.clientLastName || '').trim(),
     customerAddress: String(metadata.clientAddress || '').trim(),
+    customerPostal: String(metadata.clientPostal || '').trim(),
+    customerCity: String(metadata.clientCity || '').trim(),
+    customerCountry: String(metadata.clientCountry || '').trim(),
     customerPhone: String(metadata.clientPhone || '').trim(),
     customerEmail: String(customerEmail || '').trim(),
     amountTotal: Number(paymentIntent.amount || 0),
     currency: String(paymentIntent.currency || 'eur').trim().toLowerCase(),
     itemsLabel: String(itemsLabel || metadata.items || '').trim(),
+    items,
     suppliers: String(metadata.suppliers || '').trim(),
     shippingSummary: String(metadata.shippingSummary || '').trim(),
     skuLines: String(metadata.skuLines || '').trim(),

@@ -1386,7 +1386,11 @@ app.post('/api/create-payment-intent', async (req, res) => {
         shippingSummary: metadataShippingLabel,
         clientName: String(req.body.clientName || '').slice(0, 100),
         clientFirstName: String(req.body.clientFirstName || '').slice(0, 100),
+        clientLastName: String(req.body.clientLastName || '').slice(0, 100),
         clientAddress: String(req.body.clientAddress || '').slice(0, 300),
+        clientPostal: String(req.body.clientPostal || '').slice(0, 20),
+        clientCity: String(req.body.clientCity || '').slice(0, 100),
+        clientCountry: String(req.body.clientCountry || '').slice(0, 40),
         clientPhone: String(req.body.clientPhone || '').slice(0, 40),
         clientEmail: String(req.body.clientEmail || '').slice(0, 100)
       }

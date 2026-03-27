@@ -820,6 +820,18 @@ function getDispatchStatusLabel(status) {
 
 function renderAdminOrders() {
   const list = document.getElementById('admin-orders-list');
+  const controls = document.getElementById('admin-orders-controls');
+  if (controls && !controls.dataset.enhanced) {
+    controls.innerHTML = '<button id="toggle-canceled-orders" class="add-btn">Afficher commandes annulées/remboursées</button> <button id="export-orders-excel" class="add-btn">Exporter Excel</button>';
+    controls.dataset.enhanced = '1';
+    document.getElementById('toggle-canceled-orders').onclick = () => {
+      window.showAllOrders = !window.showAllOrders;
+      renderAdminOrders();
+    };
+    document.getElementById('export-orders-excel').onclick = () => {
+      exportOrdersToExcel();
+    };
+  }
   if (!list) return;
 
   if (!serverAdminAvailable) {
@@ -828,12 +840,73 @@ function renderAdminOrders() {
   }
 
   const orders = Array.isArray(ordersState) ? ordersState : [];
-  if (!orders.length) {
+  let filteredOrders = orders;
+  if (!window.showAllOrders) {
+    filteredOrders = orders.filter(order => {
+      const status = String(order.status || '').toLowerCase();
+      return status !== 'canceled' && status !== 'cancelled' && status !== 'refunded' && status !== 'remboursee' && status !== 'rembourse';
+    });
+  }
+  if (!filteredOrders.length) {
     list.innerHTML = '<p style="font-size:11px;color:var(--muted)">Aucune commande enregistrée pour le moment.</p>';
     return;
   }
 
-  list.innerHTML = orders.map((order) => {
+  list.innerHTML = filteredOrders.map((order) => {
+    // Export Excel (CSV simple)
+    function exportOrdersToExcel() {
+      const orders = Array.isArray(ordersState) ? ordersState : [];
+      if (!orders.length) return;
+      const headers = [
+        'Référence', 'Date', 'Statut', 'Produits', 'Quantité', 'Prix unitaire (€)', 'Prix total (€)', 'Fournisseur', 'Statut expédition', 'Tracking'
+      ];
+      const rows = orders.map(order => {
+        // On suppose que order.items est un tableau d'objets { label, quantity, unitPrice }
+        let items = Array.isArray(order.items) ? order.items : [];
+        if (!items.length && order.itemsLabel) {
+          // fallback: 1 ligne avec itemsLabel
+          items = [{ label: order.itemsLabel, quantity: order.quantity || 1, unitPrice: '' }];
+        }
+        // Si plusieurs produits, on fait une ligne par produit, sinon une seule ligne
+        if (items.length) {
+          return items.map(item => [
+            order.orderRef || order.id || '',
+            order.createdAt ? new Date(order.createdAt).toLocaleString('fr-FR') : '',
+            order.status || '',
+            item.label || '',
+            item.quantity || 1,
+            Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice).toFixed(2).replace('.', ',') : '',
+            Number.isFinite(Number(item.unitPrice)) && Number.isFinite(Number(item.quantity)) ? (Number(item.unitPrice) * Number(item.quantity)).toFixed(2).replace('.', ',') : '',
+            order.supplierProvider || '',
+            order.dispatchStatus || '',
+            order.trackingNumber || ''
+          ]);
+        } else {
+          // fallback si pas d'items détaillés
+          return [[
+            order.orderRef || order.id || '',
+            order.createdAt ? new Date(order.createdAt).toLocaleString('fr-FR') : '',
+            order.status || '',
+            order.itemsLabel || '',
+            order.quantity || 1,
+            '',
+            Number.isFinite(Number(order.amountTotal)) ? (Number(order.amountTotal) / 100).toFixed(2).replace('.', ',') : '',
+            order.supplierProvider || '',
+            order.dispatchStatus || '',
+            order.trackingNumber || ''
+          ]];
+        }
+      }).flat();
+      let csv = headers.join(';') + '\n' + rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'commandes-chiino.csv';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+    }
     const createdAt = order.createdAt
       ? new Date(order.createdAt).toLocaleString('fr-FR')
       : 'Date inconnue';
@@ -2622,7 +2695,11 @@ async function openEmbeddedStripePayment(options) {
       items: stripeItems,
       clientName: details.customerName,
       clientFirstName: details.customerFirstName,
-      clientAddress: [details.customerAddress, details.customerPostal, details.customerCity, details.customerCountry].filter(Boolean).join(', '),
+      clientLastName: details.customerLastName,
+      clientAddress: details.customerAddress,
+      clientPostal: details.customerPostal,
+      clientCity: details.customerCity,
+      clientCountry: details.customerCountry,
       clientPhone: details.customerPhone,
       clientEmail: details.customerEmail
     });

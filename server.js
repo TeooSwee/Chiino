@@ -207,13 +207,36 @@ function upsertShopOrderFromSession(session, metadata, itemsLabel) {
   });
   // Parse detailed items from skuLines and catalog
   const skuItems = parseSkuLines(metadata.skuLines || '');
+  // On tente de parser les variantes/format depuis skuLines (ex: SKU[Format]x2)
   const items = skuItems.map(({ sku, qty }) => {
-    const product = catalog[sku] || {};
+    let baseSku = sku;
+    let optionValue = '';
+    // Extraction du format/variant si présent dans le SKU (ex: SKU[Format])
+    const variantMatch = sku.match(/^(.*)\[(.*)\]$/);
+    if (variantMatch) {
+      baseSku = variantMatch[1];
+      optionValue = variantMatch[2];
+    }
+    const product = catalog[baseSku] || {};
+    // Recherche du prix de la variante si applicable
+    let price = Number(product.amount || 0) / 100;
+    let label = product.name || baseSku;
+    let optionLabel = product.optionLabel || '';
+    if (optionValue && Array.isArray(product.variants)) {
+      const variant = product.variants.find(v => v.label === optionValue);
+      if (variant) {
+        price = Number(variant.price);
+        optionLabel = product.optionLabel || 'Format';
+        label += ' (' + optionValue + ')';
+      }
+    }
     return {
-      label: product.name || sku,
-      sku,
+      label,
+      sku: baseSku,
       quantity: qty,
-      unitPrice: Number(product.amount || 0) / 100
+      unitPrice: price,
+      optionLabel: optionLabel || '',
+      optionValue: optionValue || ''
     };
   });
   const order = {
@@ -274,13 +297,36 @@ function upsertShopOrderFromPaymentIntent(paymentIntent, metadata, itemsLabel, c
 
   // Parse detailed items from skuLines and catalog
   const skuItems = parseSkuLines(metadata.skuLines || '');
+  // On tente de parser les variantes/format depuis skuLines (ex: SKU[Format]x2)
   const items = skuItems.map(({ sku, qty }) => {
-    const product = catalog[sku] || {};
+    let baseSku = sku;
+    let optionValue = '';
+    // Extraction du format/variant si présent dans le SKU (ex: SKU[Format])
+    const variantMatch = sku.match(/^(.*)\[(.*)\]$/);
+    if (variantMatch) {
+      baseSku = variantMatch[1];
+      optionValue = variantMatch[2];
+    }
+    const product = catalog[baseSku] || {};
+    // Recherche du prix de la variante si applicable
+    let price = Number(product.amount || 0) / 100;
+    let label = product.name || baseSku;
+    let optionLabel = product.optionLabel || '';
+    if (optionValue && Array.isArray(product.variants)) {
+      const variant = product.variants.find(v => v.label === optionValue);
+      if (variant) {
+        price = Number(variant.price);
+        optionLabel = product.optionLabel || 'Format';
+        label += ' (' + optionValue + ')';
+      }
+    }
     return {
-      label: product.name || sku,
-      sku,
+      label,
+      sku: baseSku,
       quantity: qty,
-      unitPrice: Number(product.amount || 0) / 100
+      unitPrice: price,
+      optionLabel: optionLabel || '',
+      optionValue: optionValue || ''
     };
   });
   const order = {

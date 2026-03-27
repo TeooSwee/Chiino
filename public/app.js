@@ -3229,11 +3229,30 @@ if (checkoutBtn) {
       // Correction : remplir la variable globale stripeItems
       stripeItems = cart.map((item) => ({
         sku: item.stripeSku || item.sku,
-        qty: item.qty
+        qty: item.qty,
+        optionLabel: item.optionLabel || '',
+        optionValue: item.optionValue || '',
+        price: item.price
       }));
 
+      // On ajoute une description détaillée pour chaque item (nom + format)
+      const itemsLabel = cart.map((item) => {
+        let label = item.baseName || item.name || item.sku;
+        if (item.optionValue) label += ' (' + item.optionValue + ')';
+        return label + ' x' + item.qty;
+      }).join(', ');
+
+      // On encode aussi les variantes dans skuLines
+      const skuLines = cart.map((item) => {
+        let sku = item.stripeSku || item.sku;
+        if (item.optionValue) sku += '[' + item.optionValue + ']';
+        return sku + 'x' + item.qty;
+      }).join('|');
+
       const result = await createStripePaymentIntent({
-        items: stripeItems
+        items: stripeItems,
+        itemsLabel,
+        skuLines
       });
       if (result.ok) {
         const openResult = await openEmbeddedStripePayment({

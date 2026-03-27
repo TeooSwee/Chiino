@@ -498,6 +498,10 @@ function applyProductDataToCard(card, product) {
     footer.appendChild(select);
     // Par défaut, stocke l'index 0
     card.dataset.variantIdx = 0;
+    // Met à jour le prix affiché dès le départ
+    const priceEl = footer.querySelector('.price');
+    if (priceEl) priceEl.textContent = Number(product.variants[0].price).toFixed(2).replace('.', ',') + '€';
+    card.dataset.price = String(product.variants[0].price);
   } else {
     card.dataset.variantIdx = '';
   }

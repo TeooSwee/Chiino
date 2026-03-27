@@ -689,7 +689,7 @@ function buildCustomRealisationCard(item, index) {
   card.dataset.customItem = '1';
 
   const img = document.createElement('img');
-  img.className = index % 2 === 0 ? 'tilt-left' : 'tilt-right';
+  img.className = '';
   img.src = item.imageSrc || 'Assets/bras-ciel.png';
   img.alt = item.title || 'Réalisation';
   img.loading = 'lazy';

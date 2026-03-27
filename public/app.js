@@ -3109,13 +3109,22 @@ function openProductModal(productCard) {
   const shortDesc = productCard.querySelector('.product-info p')?.textContent?.trim() || '';
   const longDesc = productCard.dataset.details || shortDesc;
   const badge = productCard.querySelector('.product-badge')?.textContent?.trim() || '';
-  const priceText = productCard.querySelector('.price')?.textContent?.trim() || '';
-  const oldPrice = productCard.querySelector('.price-old')?.textContent?.trim() || '';
-  const optionLabel = productCard.dataset.optionLabel || '';
-  const optionValues = (productCard.dataset.options || '')
-    .split(',')
-    .map((v) => v.trim())
-    .filter(Boolean);
+
+  // Récupère les variantes si présentes
+  let product = null;
+  const sku = productCard.dataset.sku;
+  // Cherche dans les produits custom puis défaut
+  product = customProductsState.find(p => p.sku === sku) || getMergedDefaultProduct(sku);
+  let variants = Array.isArray(product?.variants) ? product.variants : [];
+
+  // Si variantes, on affiche le select dans la modale
+  let selectedVariantIdx = 0;
+  let variantPrice = null;
+  if (variants.length > 0) {
+    variantPrice = variants[0].price;
+  }
+  const basePrice = variants.length > 0 ? variants[0].price : (product?.price || 0);
+  const oldPrice = product?.oldPrice || '';
 
   if (productModalImage) {
     productModalImage.src = img ? img.src : '';
@@ -3129,23 +3138,63 @@ function openProductModal(productCard) {
     productModalBadge.style.display = badge ? 'block' : 'none';
   }
 
-  if (productModalPrice) {
-    productModalPrice.innerHTML = oldPrice
-      ? '<span class="price-old">' + oldPrice + '</span> <span class="price">' + priceText + '</span>'
-      : '<span class="price">' + priceText + '</span>';
+  // Affichage du prix dynamique selon la variante
+  function updateModalPrice(idx) {
+    let price = basePrice;
+    let oldP = oldPrice;
+    if (variants.length > 0 && variants[idx]) price = variants[idx].price;
+    if (productModalPrice) {
+      productModalPrice.innerHTML = (oldP && Number(oldP) > Number(price))
+        ? '<span class="price-old">' + Number(oldP).toFixed(2).replace('.', ',') + '€</span> <span class="price">' + Number(price).toFixed(2).replace('.', ',') + '€</span>'
+        : '<span class="price">' + Number(price).toFixed(2).replace('.', ',') + '€</span>';
+    }
+  }
+  updateModalPrice(0);
+
+  // Affichage du select de variantes dans la modale
+  if (productModalOptionWrap && productModalOptionLabel && productModalOption) {
+    if (variants.length > 0) {
+      productModalOptionWrap.style.display = 'flex';
+      productModalOptionLabel.textContent = product.optionLabel || 'Format';
+      productModalOption.innerHTML = variants.map((v, idx) => '<option value="' + idx + '">' + v.label + '</option>').join('');
+      productModalOption.onchange = function() {
+        selectedVariantIdx = Number(this.value);
+        updateModalPrice(selectedVariantIdx);
+      };
+    } else {
+      // fallback : options classiques
+      const optionLabel = productCard.dataset.optionLabel || '';
+      const optionValues = (productCard.dataset.options || '')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean);
+      if (optionLabel && optionValues.length) {
+        productModalOptionWrap.style.display = 'flex';
+        productModalOptionLabel.textContent = optionLabel;
+        productModalOption.innerHTML = optionValues
+          .map((v) => '<option value="' + v + '">' + v + '</option>')
+          .join('');
+      } else {
+        productModalOptionWrap.style.display = 'none';
+        productModalOption.innerHTML = '';
+      }
+    }
   }
 
-  if (productModalOptionWrap && productModalOptionLabel && productModalOption) {
-    if (optionLabel && optionValues.length) {
-      productModalOptionWrap.style.display = 'flex';
-      productModalOptionLabel.textContent = optionLabel;
-      productModalOption.innerHTML = optionValues
-        .map((v) => '<option value="' + v + '">' + v + '</option>')
-        .join('');
-    } else {
-      productModalOptionWrap.style.display = 'none';
-      productModalOption.innerHTML = '';
-    }
+  // Ajout au panier : on transmet la bonne variante
+  const addToCartBtn = productModal.querySelector('.add-cart, .add-to-cart');
+  if (addToCartBtn) {
+    addToCartBtn.onclick = function() {
+      let prod = { ...product };
+      if (variants.length > 0) {
+        prod.price = variants[selectedVariantIdx].price;
+        prod.optionLabel = product.optionLabel || 'Format';
+        prod.optionValue = variants[selectedVariantIdx].label;
+        prod.variantIdx = selectedVariantIdx;
+      }
+      addToCart(prod, productCard);
+      closeProductModal();
+    };
   }
 
   productModal.classList.add('open');

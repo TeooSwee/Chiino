@@ -1,4 +1,15 @@
 // Export Excel (CSV simple) - doit être global pour le bouton
+
+// Retourne la date minimum pour une réservation (aujourd'hui + 2 jours, format YYYY-MM-DD)
+function getMinReservationDateKey() {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  now.setDate(now.getDate() + 2);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 function exportOrdersToExcel() {
   const orders = Array.isArray(ordersState) ? ordersState : [];
   if (!orders.length) return;

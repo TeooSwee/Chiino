@@ -415,7 +415,7 @@ function applyProductDataToCard(card, product) {
   card.dataset.supplier = product.supplier || card.dataset.supplier || 'Partenaire';
   card.dataset.shipping = product.shipping || card.dataset.shipping || '5-10 jours ouvres';
   card.dataset.details = product.details || product.name;
-  card.dataset.price = String(product.price || 0);
+  card.dataset.price = product.variants && product.variants.length ? String(product.variants[0].price) : String(product.price || 0);
   card.dataset.optionLabel = product.optionLabel || '';
   card.dataset.options = product.options || '';
 
@@ -475,6 +475,32 @@ function applyProductDataToCard(card, product) {
     footer.appendChild(price);
   }
 
+  // Ajout du select pour variantes si dispo
+  if (Array.isArray(product.variants) && product.variants.length > 0) {
+    const select = document.createElement('select');
+    select.className = 'product-variant-select';
+    product.variants.forEach((variant, idx) => {
+      const opt = document.createElement('option');
+      opt.value = idx;
+      opt.textContent = variant.label + ' - ' + Number(variant.price).toFixed(2).replace('.', ',') + '€';
+      select.appendChild(opt);
+    });
+    select.addEventListener('change', function() {
+      const idx = Number(this.value);
+      const v = product.variants[idx];
+      // Met à jour le prix affiché
+      const priceEl = footer.querySelector('.price');
+      if (priceEl) priceEl.textContent = Number(v.price).toFixed(2).replace('.', ',') + '€';
+      // Met à jour le dataset pour ajout panier
+      card.dataset.price = String(v.price);
+      card.dataset.variantIdx = idx;
+    });
+    footer.appendChild(select);
+    // Par défaut, stocke l'index 0
+    card.dataset.variantIdx = 0;
+  } else {
+    card.dataset.variantIdx = '';
+  }
   if (addButton) {
     footer.appendChild(addButton);
   }
@@ -1187,6 +1213,8 @@ function initAdminBackoffice() {
   const productDetailsInput = document.getElementById('admin-product-details');
   const productImageUrlInput = document.getElementById('admin-product-image-url');
   const productImageFileInput = document.getElementById('admin-product-image-file');
+  // Ajout pour variantes (formats/prix)
+  const productVariantsInput = document.getElementById('admin-product-variants'); // textarea ou champ caché
 
   const realTitleInput = document.getElementById('admin-real-title');
   const realStyleInput = document.getElementById('admin-real-style');
@@ -1231,6 +1259,7 @@ function initAdminBackoffice() {
     if (productDetailsInput) productDetailsInput.value = '';
     if (productImageUrlInput) productImageUrlInput.value = '';
     if (productImageFileInput) productImageFileInput.value = '';
+    if (productVariantsInput) productVariantsInput.value = '';
   };
 
   const resetRealForm = () => {
@@ -1532,12 +1561,21 @@ function initAdminBackoffice() {
     const details = productDetailsInput?.value?.trim() || '';
     const imageUrl = productImageUrlInput?.value?.trim() || '';
     const imageFile = productImageFileInput?.files?.[0] || null;
+    // Variantes (formats/prix)
+    let variants = [];
+    if (productVariantsInput && productVariantsInput.value.trim()) {
+      // Format attendu : une variante par ligne, séparateur ; ou ,
+      variants = productVariantsInput.value.split('\n').map(line => {
+        const [label, price] = line.split(';').map(s => s.trim());
+        return label && price ? { label, price: Number(price.replace(',', '.')) } : null;
+      }).filter(Boolean);
+    }
 
     const price = Number(priceRaw.replace(',', '.'));
     const oldPrice = Number(oldPriceRaw.replace(',', '.'));
 
-    if (!name || !Number.isFinite(price) || price <= 0) {
-      showAdminFeedback('Produit: nom et prix valide sont requis.', 'err');
+    if (!name || (!Number.isFinite(price) && variants.length === 0) || (Number.isFinite(price) && price <= 0 && variants.length === 0)) {
+      showAdminFeedback('Produit: nom et prix ou variantes valides requis.', 'err');
       return;
     }
 
@@ -1565,12 +1603,13 @@ function initAdminBackoffice() {
       name,
       shortDesc,
       details: details || name,
-      price,
+      price: variants.length ? null : price,
       oldPrice: Number.isFinite(oldPrice) && oldPrice > 0 ? oldPrice : null,
       category,
       badge,
       optionLabel,
       options,
+      variants,
       imageSrc
     };
 
@@ -1978,7 +2017,7 @@ function initAdminBackoffice() {
 
       if (productNameInput) productNameInput.value = item.name || '';
       if (productShortInput) productShortInput.value = item.shortDesc || '';
-      if (productPriceInput) productPriceInput.value = String(item.price || '');
+      if (productPriceInput) productPriceInput.value = item.price != null ? String(item.price) : '';
       if (productOldPriceInput) productOldPriceInput.value = item.oldPrice ? String(item.oldPrice) : '';
       if (productCategoryInput) productCategoryInput.value = item.category || 'modeles';
       if (productBadgeInput) productBadgeInput.value = item.badge || '';
@@ -1987,6 +2026,7 @@ function initAdminBackoffice() {
       if (productDetailsInput) productDetailsInput.value = item.details || '';
       if (productImageUrlInput) productImageUrlInput.value = item.imageSrc || '';
       if (productImageFileInput) productImageFileInput.value = '';
+      if (productVariantsInput) productVariantsInput.value = Array.isArray(item.variants) ? item.variants.map(v => v.label + ';' + v.price).join('\n') : '';
       return;
     }
 
@@ -2949,12 +2989,33 @@ function closeCart() {
   restoreFocus();
 }
 
-function addToCart(product) {
-  const existing = cart.find((item) => item.sku === product.sku);
+function addToCart(product, cardEl) {
+  // Gestion de la variante sélectionnée
+  let variantIdx = '';
+  let variant = null;
+  let optionLabel = product.optionLabel || 'Format';
+  let optionValue = '';
+  let price = product.price;
+  if (Array.isArray(product.variants) && product.variants.length > 0 && cardEl) {
+    variantIdx = cardEl.dataset.variantIdx || '0';
+    variant = product.variants[variantIdx];
+    if (variant) {
+      optionValue = variant.label;
+      price = variant.price;
+    }
+  }
+  // Recherche si même produit + même variante déjà dans le panier
+  const existing = cart.find((item) => item.sku === product.sku && item.optionValue === optionValue);
   if (existing) {
     existing.qty += 1;
   } else {
-    cart.push({ ...product, qty: 1 });
+    cart.push({
+      ...product,
+      qty: 1,
+      price: price,
+      optionLabel: optionValue ? optionLabel : '',
+      optionValue: optionValue || '',
+    });
   }
   renderCart();
 }
@@ -3116,15 +3177,17 @@ if (productModalAdd) {
     const optionLabel = activeModalProduct.dataset.optionLabel || 'Option';
     const price = getDisplayedPrice(activeModalProduct);
 
-    addToCart({
-      sku: (activeModalProduct.dataset.sku || title) + optionSuffix,
+    // On passe l'élément de carte pour détecter la variante sélectionnée
+    const product = {
+      sku: (activeModalProduct.dataset.sku || title),
       stripeSku: activeModalProduct.dataset.sku || title,
       baseName: title,
-      name: title + optionSuffix,
+      name: title,
       optionLabel,
       optionValue,
       price
-    });
+    };
+    addToCart(product, activeModalProduct);
 
     closeProductModal();
   });

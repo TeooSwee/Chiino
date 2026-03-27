@@ -3278,19 +3278,24 @@ if (depositBtn) {
     }
 
     try {
-      const result = await startStripeCheckout('/api/create-deposit-session', {
-        customer: { prenom, nom, telephone },
-        projet: { style, zone, disponibilites, description, selectedDate, selectedPeriod, images }
+      // Appel du paiement intégré Stripe (comme la boutique)
+      const result = await createStripePaymentIntent({
+        items: [{ sku: 'DEPOSIT', qty: 1 }],
+        clientName: prenom + ' ' + nom,
+        clientFirstName: prenom,
+        clientLastName: nom,
+        clientPhone: telephone,
+        // On peut ajouter d'autres infos si besoin
       });
-
-      if (!result.ok && /créneau|creneau|occupé|occupe|indisponible/i.test(String(result.reason || ''))) {
-        showDepositFeedback(String(result.reason || 'Le créneau n\'est plus disponible.'), 'err');
-        await loadReservationAvailability();
+      if (result.ok) {
+        const openResult = await openEmbeddedStripePayment({
+          clientSecret: result.clientSecret,
+          orderRef: result.orderRef
+        });
+        if (openResult.ok) return;
+        showDepositFeedback('Erreur lors du paiement Stripe. Merci de réessayer plus tard.', 'err');
         return;
       }
-
-      if (result.ok) return;
-      // Si Stripe refuse la création de paiement
       showDepositFeedback('Erreur lors de la création du paiement Stripe. Merci de réessayer plus tard.', 'err');
     } catch (error) {
       showDepositFeedback('Erreur lors de la communication avec Stripe. Merci de réessayer plus tard.', 'err');

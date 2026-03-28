@@ -1,3 +1,97 @@
+// --- Restriction des jours de réservation selon la config admin ---
+// --- Gestion calendrier mensuel de disponibilités admin ---
+const AVAILABLE_DATES_KEY = 'chiino_available_dates_v1';
+let availableDatesState = [];
+
+function getCurrentMonthYear() {
+  const now = new Date();
+  return { month: now.getMonth(), year: now.getFullYear() };
+}
+
+function renderAdminAvailableCalendar() {
+  const calendarDiv = document.getElementById('admin-available-calendar');
+  if (!calendarDiv) return;
+  const { month, year } = getCurrentMonthYear();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  let html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">';
+  const weekDays = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+  weekDays.forEach(d => html += `<div style='font-weight:bold'>${d}</div>`);
+  let start = firstDay.getDay();
+  start = start === 0 ? 6 : start - 1; // Lundi=0
+  for (let i = 0; i < start; i++) html += '<div></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const checked = availableDatesState.includes(dateKey);
+    html += `<label style='cursor:pointer'><input type='checkbox' class='admin-available-date' value='${dateKey}' ${checked ? 'checked' : ''}>${d}</label>`;
+  }
+  html += '</div>';
+  calendarDiv.innerHTML = html;
+}
+
+function bindAdminAvailableCalendar() {
+  renderAdminAvailableCalendar();
+  const calendarDiv = document.getElementById('admin-available-calendar');
+  if (!calendarDiv) return;
+  calendarDiv.addEventListener('change', function(e) {
+    if (e.target.classList.contains('admin-available-date')) {
+      const val = e.target.value;
+      if (e.target.checked) {
+        if (!availableDatesState.includes(val)) availableDatesState.push(val);
+      } else {
+        availableDatesState = availableDatesState.filter(d => d !== val);
+      }
+    }
+  });
+}
+
+// Nouvelle version : ne sont valides que les jours cochés dans le calendrier admin (AVAILABLE_DATES_KEY)
+function isDayAvailableForReservation(date) {
+  // date : objet Date
+  const availableDates = readJsonStorage(AVAILABLE_DATES_KEY, []);
+  const key = date.toISOString().slice(0,10);
+  return availableDates.includes(key);
+}
+
+function updateReservationDayInput() {
+  const dayInput = document.getElementById('reservation-day');
+  if (!dayInput) return;
+  // Empêche la sélection de jours non disponibles
+  dayInput.addEventListener('input', function() {
+    const val = dayInput.value;
+    if (!val) return;
+    const d = new Date(val + 'T00:00:00');
+    if (!isDayAvailableForReservation(d)) {
+      dayInput.setCustomValidity('Ce jour n\'est pas disponible.');
+      dayInput.reportValidity();
+    } else {
+      dayInput.setCustomValidity('');
+    }
+  });
+
+  // Empêche la sélection via le calendrier natif (pour UX, mais contournable)
+  dayInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      const val = dayInput.value;
+      if (val) {
+        const d = new Date(val + 'T00:00:00');
+        if (!isDayAvailableForReservation(d)) {
+          dayInput.setCustomValidity('Ce jour n\'est pas disponible.');
+          dayInput.reportValidity();
+        } else {
+          dayInput.setCustomValidity('');
+        }
+      }
+    }
+  });
+
+  // Optionnel : afficher un message ou désactiver les jours non valides (si on veut aller plus loin, il faut un datepicker custom)
+}
+
+if (window.location.pathname.endsWith('reservation.html')) {
+  document.addEventListener('DOMContentLoaded', updateReservationDayInput);
+}
 // Export Excel (CSV simple) - doit être global pour le bouton
 
 // Retourne la date minimum pour une réservation (aujourd'hui + 2 jours, format YYYY-MM-DD)
@@ -158,6 +252,9 @@ let editingProductId = null;
 let editingRealId = null;
 let editingProductMode = null;
 let editingRealMode = null;
+// Gestion des jours de disponibilité hebdomadaire (0=dimanche, 1=lundi...)
+const AVAILABLE_DAYS_KEY = 'chiino_available_days_v1';
+let availableDaysState = [];
 
 const DEFAULT_PRODUCT_ITEMS = [
   {
@@ -292,6 +389,9 @@ function loadStateFromLocalStorage() {
     featuredRealisations: readJsonStorage(FEATURED_REALS_KEY, []),
     scheduleEntries: readJsonStorage(SCHEDULE_ENTRIES_KEY, [])
   });
+
+  availableDaysState = readJsonStorage(AVAILABLE_DAYS_KEY, [1,2,3,4,5]); // Par défaut lundi-vendredi
+  availableDatesState = readJsonStorage(AVAILABLE_DATES_KEY, []);
 }
 
 function persistStateToLocalStorage() {
@@ -304,6 +404,8 @@ function persistStateToLocalStorage() {
   writeJsonStorage(FEATURED_PRODUCTS_KEY, featuredProductsState);
   writeJsonStorage(FEATURED_REALS_KEY, featuredRealisationsState);
   writeJsonStorage(SCHEDULE_ENTRIES_KEY, scheduleEntriesState);
+  writeJsonStorage(AVAILABLE_DAYS_KEY, availableDaysState);
+  writeJsonStorage(AVAILABLE_DATES_KEY, availableDatesState);
 }
 
 async function tryLoadStateFromServer() {
@@ -1170,6 +1272,49 @@ function renderAdminLists() {
 function initAdminBackoffice() {
   const page = document.getElementById('page-admin');
   if (!page) return;
+
+  // Gestion du formulaire jours disponibles
+  const availableDaysForm = document.getElementById('admin-available-days-form');
+  const availableDaysInputs = availableDaysForm ? availableDaysForm.querySelectorAll('input[type="checkbox"][name="availableDays"]') : [];
+  const availableDaysSaved = document.getElementById('admin-available-days-saved');
+
+  // Initialisation des cases à cocher selon l'état
+  if (availableDaysInputs && availableDaysInputs.length) {
+    availableDaysInputs.forEach(input => {
+      input.checked = availableDaysState.includes(Number(input.value));
+    });
+  }
+
+  // Sauvegarde lors de la soumission
+  if (availableDaysForm) {
+    availableDaysForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      availableDaysState = Array.from(availableDaysInputs)
+        .filter(input => input.checked)
+        .map(input => Number(input.value));
+      writeJsonStorage(AVAILABLE_DAYS_KEY, availableDaysState);
+      if (availableDaysSaved) {
+        availableDaysSaved.style.display = 'inline';
+        setTimeout(() => { availableDaysSaved.style.display = 'none'; }, 1200);
+      }
+    });
+  }
+
+  // Calendrier mensuel de disponibilités
+  const calendarWrap = document.getElementById('admin-available-calendar-wrap');
+  const calendarSaved = document.getElementById('admin-available-calendar-saved');
+  const saveCalendarBtn = document.getElementById('admin-save-available-calendar');
+  if (calendarWrap) {
+    bindAdminAvailableCalendar();
+    saveCalendarBtn?.addEventListener('click', function(e) {
+      e.preventDefault();
+      writeJsonStorage(AVAILABLE_DATES_KEY, availableDatesState);
+      if (calendarSaved) {
+        calendarSaved.style.display = 'inline';
+        setTimeout(() => { calendarSaved.style.display = 'none'; }, 1200);
+      }
+    });
+  }
 
   const loginWrap = document.getElementById('admin-login-wrap');
   const panel = document.getElementById('admin-panel');

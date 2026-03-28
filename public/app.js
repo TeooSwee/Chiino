@@ -4,41 +4,49 @@ const AVAILABLE_DATES_KEY = 'chiino_available_dates_v1';
 // Format: [{date: 'YYYY-MM-DD', slots: ['matin','apres-midi','soiree']}, ...]
 let availableDatesState = [];
 
-function getCurrentMonthYear() {
-  const now = new Date();
-  return { month: now.getMonth(), year: now.getFullYear() };
+function getCurrentPeriodRange() {
+  // Retourne [dateDébut, dateFin] pour la période aujourd'hui -> aujourd'hui + 1 mois
+  const start = new Date();
+  start.setHours(0,0,0,0);
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + 1);
+  return [start, end];
 }
 
 function renderAdminAvailableCalendar() {
   const calendarDiv = document.getElementById('admin-available-calendar');
   if (!calendarDiv) return;
-  const { month, year } = getCurrentMonthYear();
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const daysInMonth = lastDay.getDate();
+  const [startDate, endDate] = getCurrentPeriodRange();
   const daysShort = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
   let html = '';
+  // Générer tous les jours de la période
+  const days = [];
+  let d = new Date(startDate);
+  while (d < endDate) {
+    days.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
   // En-têtes jours
   for (let i = 0; i < 7; i++) {
     html += '<div class="dispo-cell dispo-head" style="background:none;color:var(--muted);font-size:12px;cursor:default">' + daysShort[i] + '</div>';
   }
-  // Cases vides avant le 1er
-  let start = firstDay.getDay();
-  start = start === 0 ? 6 : start - 1;
-  for (let i = 0; i < start; i++) html += '<div class="dispo-cell dispo-none" style="background:none;cursor:default"></div>';
-  // Jours du mois
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  // Cases vides avant le premier jour
+  let firstWeekDay = days[0].getDay();
+  firstWeekDay = firstWeekDay === 0 ? 6 : firstWeekDay - 1;
+  for (let i = 0; i < firstWeekDay; i++) html += '<div class="dispo-cell dispo-none" style="background:none;cursor:default"></div>';
+  // Affichage des jours
+  days.forEach(dateObj => {
+    const dateKey = dateObj.toISOString().slice(0,10);
     const found = availableDatesState.find((item) => item.date === dateKey);
     const isSelected = !!found;
     const slots = found && found.slots ? found.slots : [];
-    html += '<div class="dispo-cell' + (isSelected ? ' selected' : '') + '" data-date="' + dateKey + '"><div>' + d + '</div>';
+    html += '<div class="dispo-cell' + (isSelected ? ' selected' : '') + '" data-date="' + dateKey + '"><div>' + dateObj.getDate() + '</div>';
     html += '<div class="dispo-badges">';
     html += '<span class="dispo-badge dispo-matin" title="Matin" style="opacity:' + (slots.includes('matin') ? '1' : '.18') + '"></span>';
     html += '<span class="dispo-badge dispo-aprem" title="Après-midi" style="opacity:' + (slots.includes('aprem') ? '1' : '.18') + '"></span>';
     html += '<span class="dispo-badge dispo-soir" title="Soirée" style="opacity:' + (slots.includes('soiree') ? '1' : '.18') + '"></span>';
     html += '</div></div>';
-  }
+  });
   calendarDiv.innerHTML = html;
 }
 
@@ -47,20 +55,52 @@ function bindAdminAvailableCalendar() {
   const calendarDiv = document.getElementById('admin-available-calendar');
   if (!calendarDiv) return;
   calendarDiv.addEventListener('click', function(e) {
-    const dayDiv = e.target.closest('.admin-cal-day');
+    // Gestion clic sur badge créneau
+    const badge = e.target.closest('.dispo-badge');
+    if (badge && badge.parentElement && badge.parentElement.parentElement) {
+      const dayDiv = badge.parentElement.parentElement;
+      const dateKey = dayDiv.dataset.date;
+      let dayObj = availableDatesState.find(obj => obj.date === dateKey);
+      if (!dayObj) {
+        // Si aucun objet, on crée avec le slot cliqué uniquement
+        const slot = badge.classList.contains('dispo-matin') ? 'matin' : badge.classList.contains('dispo-aprem') ? 'aprem' : badge.classList.contains('dispo-soir') ? 'soiree' : null;
+        if (!slot) return;
+        dayObj = { date: dateKey, slots: [slot] };
+        availableDatesState.push(dayObj);
+      } else {
+        // Toggle le slot correspondant
+        let slot = null;
+        if (badge.classList.contains('dispo-matin')) slot = 'matin';
+        else if (badge.classList.contains('dispo-aprem')) slot = 'aprem';
+        else if (badge.classList.contains('dispo-soir')) slot = 'soiree';
+        if (!slot) return;
+        if (dayObj.slots.includes(slot)) {
+          dayObj.slots = dayObj.slots.filter(s => s !== slot);
+        } else {
+          dayObj.slots.push(slot);
+        }
+        // Si plus de créneaux, on supprime le jour
+        if (dayObj.slots.length === 0) {
+          availableDatesState = availableDatesState.filter(obj => obj.date !== dateKey);
+        }
+      }
+      renderAdminAvailableCalendar();
+      return;
+    }
+    // Gestion clic sur le jour (hors badge) : sélectionne tous les créneaux si non sélectionné, sinon ouvre le menu détaillé
+    const dayDiv = e.target.closest('.dispo-cell[data-date]');
     if (!dayDiv) return;
     const dateKey = dayDiv.dataset.date;
     let dayObj = availableDatesState.find(obj => obj.date === dateKey);
     if (!dayObj) {
       // Ajouter le jour avec tous les créneaux par défaut
-      dayObj = { date: dateKey, slots: ['matin','apres-midi','soiree'] };
+      dayObj = { date: dateKey, slots: ['matin','aprem','soiree'] };
       availableDatesState.push(dayObj);
+      renderAdminAvailableCalendar();
     } else {
-      // Ouvre un mini-menu pour choisir les créneaux
-      showSlotSelector(dayDiv, dayObj);
-      return;
+      // Ouvre le menu détaillé si besoin (optionnel)
+      // showSlotSelector(dayDiv, dayObj); // désactivé pour UX plus directe
     }
-    renderAdminAvailableCalendar();
   });
 }
 

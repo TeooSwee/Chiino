@@ -109,22 +109,32 @@
         </article>
       </div>
 
-      <div id="admin-module-reals" class="admin-module" style="display:none">
+      <div id="admin-module-schedule" class="admin-module" style="display:none">
         <article class="admin-card">
           <div class="admin-card-head">
-            <h2 id="admin-real-form-title">Ajouter une réalisation</h2>
-            <button class="add-btn" data-admin-target="home">Retour accueil</button>
+            <h2>Mes disponibilités</h2>
           </div>
-          <div class="form-grid">
-            <div class="fg"><label for="admin-real-title">Titre</label><input id="admin-real-title" type="text" placeholder="Ex: Espoir"></div>
-            <div class="fg"><label for="admin-real-style">Style</label><select id="admin-real-style"><option>Géométrique</option><option>Japonais</option><option>Old School</option><option>Lettering</option><option>Florale</option><option>Flash custom</option></select></div>
-            <div class="fg"><label for="admin-real-image-url">Image URL (optionnel)</label><input id="admin-real-image-url" type="url" placeholder="https://..."></div>
-            <div class="fg"><label for="admin-real-image-file">ou Image depuis votre appareil</label><input id="admin-real-image-file" type="file" accept="image/*"></div>
+          <div id="admin-available-calendar-wrap" style="margin-bottom:32px">
+            <label style="font-weight:bold;margin-bottom:6px;display:block">Jours ouverts à la réservation (sur 1 mois) :</label>
+            <div id="admin-available-calendar"></div>
+            <div style="font-size:13px;color:var(--muted);margin:8px 0 0 0;line-height:1.6">
+              <span style="display:inline-block;width:18px;height:18px;background:var(--primary);border-radius:3px;margin-right:6px;vertical-align:middle"></span> Jour sélectionné<br>
+              <span style="display:inline-block;width:12px;height:12px;background:var(--primary);border-radius:50%;margin-right:6px;vertical-align:middle"></span> Matin / Après-midi / Soirée sélectionné<br>
+              <span style="margin-left:24px">Clique sur un jour pour choisir les créneaux ouverts</span>
+            </div>
+            <button id="admin-save-available-calendar" class="btn-prim" style="margin-top:14px">Enregistrer les jours</button>
+            <span id="admin-available-calendar-saved" style="margin-left:10px;color:green;display:none">Enregistré !</span>
           </div>
-          <div class="admin-inline-actions" style="display:flex;gap:10px;margin-top:12px">
-            <button id="admin-add-real" class="btn-prim" style="margin-top:0;flex:1">Ajouter la réalisation</button>
-            <button id="admin-cancel-real-edit" class="add-btn" style="display:none">Annuler</button>
+        </article>
+        <article class="admin-card" style="margin-top:32px">
+          <div class="admin-card-head">
+            <h2>Emploi du temps</h2>
+            <div class="admin-head-actions" style="display:flex;gap:8px">
+              <button id="admin-open-schedule-modal" class="btn-prim" style="margin-top:0">Ajouter un créneau</button>
+              <button class="add-btn" data-admin-target="home">Retour accueil</button>
+            </div>
           </div>
+          <div id="admin-schedule-planner" class="admin-schedule-planner"></div>
         </article>
 
         <article class="admin-card">

@@ -1,6 +1,7 @@
 // --- Restriction des jours de réservation selon la config admin ---
 // --- Gestion calendrier mensuel de disponibilités admin ---
 const AVAILABLE_DATES_KEY = 'chiino_available_dates_v1';
+// Format: [{date: 'YYYY-MM-DD', slots: ['matin','apres-midi','soiree']}, ...]
 let availableDatesState = [];
 
 function getCurrentMonthYear() {
@@ -23,8 +24,19 @@ function renderAdminAvailableCalendar() {
   for (let i = 0; i < start; i++) html += '<div></div>';
   for (let d = 1; d <= daysInMonth; d++) {
     const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const checked = availableDatesState.includes(dateKey);
-    html += `<label style='cursor:pointer'><input type='checkbox' class='admin-available-date' value='${dateKey}' ${checked ? 'checked' : ''}>${d}</label>`;
+    const dayObj = availableDatesState.find(obj => obj.date === dateKey);
+    const checked = !!dayObj;
+    html += `<div class='admin-cal-day' data-date='${dateKey}' style='background:${checked ? "var(--primary)" : "#f6f6f6"};color:${checked ? "#fff" : "#222"};border-radius:4px;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative'>`;
+    html += `<div style='font-size:15px;font-weight:bold'>${d}</div>`;
+    if (checked) {
+      const slots = dayObj.slots || [];
+      html += `<div style='display:flex;gap:4px;margin-top:2px'>`;
+      html += `<span class='admin-cal-slot-dot' data-slot='matin' style='width:12px;height:12px;border-radius:50%;background:${slots.includes('matin') ? "#fff" : "#bbb"};display:inline-block;'></span>`;
+      html += `<span class='admin-cal-slot-dot' data-slot='apres-midi' style='width:12px;height:12px;border-radius:50%;background:${slots.includes('apres-midi') ? "#fff" : "#bbb"};display:inline-block;'></span>`;
+      html += `<span class='admin-cal-slot-dot' data-slot='soiree' style='width:12px;height:12px;border-radius:50%;background:${slots.includes('soiree') ? "#fff" : "#bbb"};display:inline-block;'></span>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
   }
   html += '</div>';
   calendarDiv.innerHTML = html;
@@ -34,30 +46,122 @@ function bindAdminAvailableCalendar() {
   renderAdminAvailableCalendar();
   const calendarDiv = document.getElementById('admin-available-calendar');
   if (!calendarDiv) return;
-  calendarDiv.addEventListener('change', function(e) {
-    if (e.target.classList.contains('admin-available-date')) {
-      const val = e.target.value;
-      if (e.target.checked) {
-        if (!availableDatesState.includes(val)) availableDatesState.push(val);
-      } else {
-        availableDatesState = availableDatesState.filter(d => d !== val);
-      }
+  calendarDiv.addEventListener('click', function(e) {
+    const dayDiv = e.target.closest('.admin-cal-day');
+    if (!dayDiv) return;
+    const dateKey = dayDiv.dataset.date;
+    let dayObj = availableDatesState.find(obj => obj.date === dateKey);
+    if (!dayObj) {
+      // Ajouter le jour avec tous les créneaux par défaut
+      dayObj = { date: dateKey, slots: ['matin','apres-midi','soiree'] };
+      availableDatesState.push(dayObj);
+    } else {
+      // Ouvre un mini-menu pour choisir les créneaux
+      showSlotSelector(dayDiv, dayObj);
+      return;
     }
+    renderAdminAvailableCalendar();
   });
 }
 
+function showSlotSelector(dayDiv, dayObj) {
+  // Supprime tout menu existant
+  document.querySelectorAll('.admin-cal-slot-menu').forEach(el => el.remove());
+  const menu = document.createElement('div');
+  menu.className = 'admin-cal-slot-menu';
+  menu.style.position = 'absolute';
+  menu.style.top = '36px';
+  menu.style.left = '50%';
+  menu.style.transform = 'translateX(-50%)';
+  menu.style.background = '#fff';
+  menu.style.border = '1px solid #ddd';
+  menu.style.borderRadius = '6px';
+  menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
+  menu.style.padding = '8px 12px';
+  menu.style.zIndex = '10';
+  menu.style.display = 'flex';
+  menu.style.gap = '10px';
+  menu.style.alignItems = 'center';
+  menu.innerHTML = [
+    slotToggleHtml('matin', dayObj.slots),
+    slotToggleHtml('apres-midi', dayObj.slots),
+    slotToggleHtml('soiree', dayObj.slots),
+    `<button class='admin-cal-slot-del' style='background:none;border:none;color:#c00;font-size:13px;cursor:pointer'>Suppr</button>`
+  ].join('');
+  dayDiv.appendChild(menu);
+  menu.querySelectorAll('.admin-cal-slot-toggle').forEach(btn => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      const slot = btn.dataset.slot;
+      if (dayObj.slots.includes(slot)) {
+        dayObj.slots = dayObj.slots.filter(s => s !== slot);
+      } else {
+        dayObj.slots.push(slot);
+      }
+      if (dayObj.slots.length === 0) {
+        // Si plus de créneaux, on supprime le jour
+        availableDatesState = availableDatesState.filter(obj => obj.date !== dayObj.date);
+      }
+      renderAdminAvailableCalendar();
+      showSlotSelector(dayDiv, dayObj);
+    };
+  });
+  menu.querySelector('.admin-cal-slot-del').onclick = (ev) => {
+    ev.stopPropagation();
+    availableDatesState = availableDatesState.filter(obj => obj.date !== dayObj.date);
+    renderAdminAvailableCalendar();
+  };
+  // Fermer le menu si clic ailleurs
+  setTimeout(() => {
+    document.addEventListener('click', closeSlotMenu, { once: true });
+  }, 10);
+  function closeSlotMenu(ev) {
+    if (!menu.contains(ev.target)) menu.remove();
+  }
+}
+
+function slotToggleHtml(slot, slots) {
+  const label = slot === 'matin' ? 'Matin' : slot === 'apres-midi' ? 'Après-midi' : 'Soirée';
+  const active = slots.includes(slot);
+  return `<button type='button' class='admin-cal-slot-toggle' data-slot='${slot}' style='background:${active ? "var(--primary)" : "#eee"};color:${active ? "#fff" : "#222"};border:none;border-radius:4px;padding:4px 10px;font-size:13px;cursor:pointer'>${label}</button>`;
+}
+
 // Nouvelle version : ne sont valides que les jours cochés dans le calendrier admin (AVAILABLE_DATES_KEY)
-function isDayAvailableForReservation(date) {
-  // date : objet Date
+function isDayAvailableForReservation(date, slot) {
+  // date : objet Date, slot: 'matin'|'apres-midi'|'soiree' (optionnel)
   const availableDates = readJsonStorage(AVAILABLE_DATES_KEY, []);
   const key = date.toISOString().slice(0,10);
-  return availableDates.includes(key);
+  const obj = availableDates.find(obj => obj.date === key);
+  if (!obj) return false;
+  if (!slot) return true;
+  return obj.slots.includes(slot);
 }
+
 
 function updateReservationDayInput() {
   const dayInput = document.getElementById('reservation-day');
-  if (!dayInput) return;
-  // Empêche la sélection de jours non disponibles
+  const periodSelect = document.getElementById('reservation-period');
+  if (!dayInput || !periodSelect) return;
+
+  function updatePeriodsForDay(val) {
+    if (!val) return;
+    const d = new Date(val + 'T00:00:00');
+    const availableDates = readJsonStorage(AVAILABLE_DATES_KEY, []);
+    const key = d.toISOString().slice(0,10);
+    const obj = availableDates.find(obj => obj.date === key);
+    // On garde la valeur sélectionnée si encore dispo
+    const current = periodSelect.value;
+    periodSelect.innerHTML = '<option value="">Choisir un moment</option>';
+    if (obj && Array.isArray(obj.slots)) {
+      if (obj.slots.includes('matin')) periodSelect.innerHTML += '<option value="matin">Matin</option>';
+      if (obj.slots.includes('apres-midi')) periodSelect.innerHTML += '<option value="apres-midi">Après-midi</option>';
+      if (obj.slots.includes('soiree')) periodSelect.innerHTML += '<option value="soiree">Soirée</option>';
+    }
+    if (obj && obj.slots.includes(current)) periodSelect.value = current;
+    else periodSelect.value = '';
+  }
+
+  // Empêche la sélection de jours non disponibles et adapte les moments
   dayInput.addEventListener('input', function() {
     const val = dayInput.value;
     if (!val) return;
@@ -65,8 +169,10 @@ function updateReservationDayInput() {
     if (!isDayAvailableForReservation(d)) {
       dayInput.setCustomValidity('Ce jour n\'est pas disponible.');
       dayInput.reportValidity();
+      updatePeriodsForDay(null);
     } else {
       dayInput.setCustomValidity('');
+      updatePeriodsForDay(val);
     }
   });
 
@@ -79,14 +185,17 @@ function updateReservationDayInput() {
         if (!isDayAvailableForReservation(d)) {
           dayInput.setCustomValidity('Ce jour n\'est pas disponible.');
           dayInput.reportValidity();
+          updatePeriodsForDay(null);
         } else {
           dayInput.setCustomValidity('');
+          updatePeriodsForDay(val);
         }
       }
     }
   });
 
-  // Optionnel : afficher un message ou désactiver les jours non valides (si on veut aller plus loin, il faut un datepicker custom)
+  // Initialisation au chargement
+  updatePeriodsForDay(dayInput.value);
 }
 
 if (window.location.pathname.endsWith('reservation.html')) {

@@ -116,15 +116,17 @@
             <h2>Mes disponibilités</h2>
           </div>
           <div id="admin-available-calendar-wrap" style="margin-bottom:32px">
-            <label style="font-weight:bold;margin-bottom:6px;display:block">Jours ouverts à la réservation (sur 1 mois) :</label>
-            <div id="admin-available-calendar"></div>
-            <div style="font-size:13px;color:var(--muted);margin:8px 0 0 0;line-height:1.6">
-              <span style="display:inline-block;width:18px;height:18px;background:var(--primary);border-radius:3px;margin-right:6px;vertical-align:middle"></span> Jour sélectionné<br>
-              <span style="display:inline-block;width:12px;height:12px;background:var(--primary);border-radius:50%;margin-right:6px;vertical-align:middle"></span> Matin / Après-midi / Soirée sélectionné<br>
-              <span style="margin-left:24px">Clique sur un jour pour choisir les créneaux ouverts</span>
+            <label style="font-weight:bold;margin-bottom:10px;display:block;font-size:15px">Disponibilités du mois</label>
+            <div id="admin-available-calendar" class="dispo-calendar"></div>
+            <div class="dispo-legend">
+              <span class="dispo-badge dispo-matin"></span> Matin
+              <span class="dispo-badge dispo-aprem"></span> Après-midi
+              <span class="dispo-badge dispo-soir"></span> Soirée
+              <span class="dispo-badge dispo-none"></span> Indisponible
             </div>
-            <button id="admin-save-available-calendar" class="btn-prim" style="margin-top:14px">Enregistrer les jours</button>
-            <span id="admin-available-calendar-saved" style="margin-left:10px;color:green;display:none">Enregistré !</span>
+            <div class="dispo-hint">Clique sur un jour pour modifier les créneaux. Les couleurs indiquent les périodes ouvertes à la réservation.</div>
+            <button id="admin-save-available-calendar" class="btn-prim" style="margin-top:18px">Enregistrer</button>
+            <span id="admin-available-calendar-saved" style="margin-left:10px;color:var(--accent);display:none">Enregistré !</span>
           </div>
         </article>
       </div>

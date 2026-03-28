@@ -16,29 +16,29 @@ function renderAdminAvailableCalendar() {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
   const daysInMonth = lastDay.getDate();
-  let html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">';
-  const weekDays = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
-  weekDays.forEach(d => html += `<div style='font-weight:bold'>${d}</div>`);
+  const daysShort = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+  let html = '';
+  // En-têtes jours
+  for (let i = 0; i < 7; i++) {
+    html += '<div class="dispo-cell dispo-head" style="background:none;color:var(--muted);font-size:12px;cursor:default">' + daysShort[i] + '</div>';
+  }
+  // Cases vides avant le 1er
   let start = firstDay.getDay();
-  start = start === 0 ? 6 : start - 1; // Lundi=0
-  for (let i = 0; i < start; i++) html += '<div></div>';
+  start = start === 0 ? 6 : start - 1;
+  for (let i = 0; i < start; i++) html += '<div class="dispo-cell dispo-none" style="background:none;cursor:default"></div>';
+  // Jours du mois
   for (let d = 1; d <= daysInMonth; d++) {
     const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const dayObj = availableDatesState.find(obj => obj.date === dateKey);
-    const checked = !!dayObj;
-    html += `<div class='admin-cal-day' data-date='${dateKey}' style='background:${checked ? "var(--primary)" : "#f6f6f6"};color:${checked ? "#fff" : "#222"};border-radius:4px;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative'>`;
-    html += `<div style='font-size:15px;font-weight:bold'>${d}</div>`;
-    if (checked) {
-      const slots = dayObj.slots || [];
-      html += `<div style='display:flex;gap:4px;margin-top:2px'>`;
-      html += `<span class='admin-cal-slot-dot' data-slot='matin' style='width:12px;height:12px;border-radius:50%;background:${slots.includes('matin') ? "#fff" : "#bbb"};display:inline-block;'></span>`;
-      html += `<span class='admin-cal-slot-dot' data-slot='apres-midi' style='width:12px;height:12px;border-radius:50%;background:${slots.includes('apres-midi') ? "#fff" : "#bbb"};display:inline-block;'></span>`;
-      html += `<span class='admin-cal-slot-dot' data-slot='soiree' style='width:12px;height:12px;border-radius:50%;background:${slots.includes('soiree') ? "#fff" : "#bbb"};display:inline-block;'></span>`;
-      html += `</div>`;
-    }
-    html += `</div>`;
+    const found = availableDatesState.find((item) => item.date === dateKey);
+    const isSelected = !!found;
+    const slots = found && found.slots ? found.slots : [];
+    html += '<div class="dispo-cell' + (isSelected ? ' selected' : '') + '" data-date="' + dateKey + '"><div>' + d + '</div>';
+    html += '<div class="dispo-badges">';
+    html += '<span class="dispo-badge dispo-matin" title="Matin" style="opacity:' + (slots.includes('matin') ? '1' : '.18') + '"></span>';
+    html += '<span class="dispo-badge dispo-aprem" title="Après-midi" style="opacity:' + (slots.includes('aprem') ? '1' : '.18') + '"></span>';
+    html += '<span class="dispo-badge dispo-soir" title="Soirée" style="opacity:' + (slots.includes('soiree') ? '1' : '.18') + '"></span>';
+    html += '</div></div>';
   }
-  html += '</div>';
   calendarDiv.innerHTML = html;
 }
 

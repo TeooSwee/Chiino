@@ -48,6 +48,7 @@
           <button class="btn-prim admin-home-btn" data-admin-target="reals">Réalisations</button>
           <button class="btn-prim admin-home-btn" data-admin-target="products">Produits</button>
           <button class="btn-prim admin-home-btn" data-admin-target="orders">Commandes</button>
+          <button class="btn-prim admin-home-btn" data-admin-target="disponibilites">Disponibilités</button>
           <button class="btn-prim admin-home-btn" data-admin-target="schedule">Emploi du temps</button>
         </div>
       </article>
@@ -109,7 +110,7 @@
         </article>
       </div>
 
-      <div id="admin-module-schedule" class="admin-module" style="display:none">
+      <div id="admin-module-disponibilites" class="admin-module" style="display:none">
         <article class="admin-card">
           <div class="admin-card-head">
             <h2>Mes disponibilités</h2>
@@ -126,7 +127,10 @@
             <span id="admin-available-calendar-saved" style="margin-left:10px;color:green;display:none">Enregistré !</span>
           </div>
         </article>
-        <article class="admin-card" style="margin-top:32px">
+      </div>
+
+      <div id="admin-module-schedule" class="admin-module" style="display:none">
+        <article class="admin-card">
           <div class="admin-card-head">
             <h2>Emploi du temps</h2>
             <div class="admin-head-actions" style="display:flex;gap:8px">
@@ -135,22 +139,6 @@
             </div>
           </div>
           <div id="admin-schedule-planner" class="admin-schedule-planner"></div>
-        </article>
-
-        <article class="admin-card">
-          <div class="admin-card-head">
-            <h2>Réalisations du site</h2>
-            <button id="admin-restore-default-reals" class="add-btn">Tout restaurer</button>
-          </div>
-          <div id="admin-default-reals-list" class="admin-list"></div>
-        </article>
-
-        <article class="admin-card">
-          <div class="admin-card-head">
-            <h2>Dernières réalisations (Accueil)</h2>
-            <button id="admin-save-featured" class="add-btn">Enregistrer la sélection</button>
-          </div>
-          <div id="admin-featured-list" class="admin-list"></div>
         </article>
       </div>
 

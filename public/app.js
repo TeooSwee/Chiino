@@ -1720,6 +1720,8 @@ function initAdminBackoffice() {
     if (moduleProducts) moduleProducts.style.display = key === 'products' ? '' : 'none';
     if (moduleReals) moduleReals.style.display = key === 'reals' ? '' : 'none';
     if (moduleSchedule) moduleSchedule.style.display = key === 'schedule' ? '' : 'none';
+    const moduleDisponibilites = document.getElementById('admin-module-disponibilites');
+    if (moduleDisponibilites) moduleDisponibilites.style.display = key === 'disponibilites' ? '' : 'none';
     if (key === 'orders') {
       loadAdminOrders();
     }

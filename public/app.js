@@ -1,3 +1,21 @@
+// Affichage forcé des produits par défaut dans l'admin
+document.addEventListener('DOMContentLoaded', () => {
+  const productsList = document.getElementById('admin-default-products-list');
+  if (productsList) {
+    let html = '';
+    (Array.isArray(DEFAULT_PRODUCT_ITEMS) ? DEFAULT_PRODUCT_ITEMS : []).forEach(prod => {
+      html += `<div class="product-admin-item" style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:8px 0;border-bottom:1px solid #eee;">
+        <img src="${prod.imageSrc}" alt="${prod.name}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;background:#f8f8f8;">
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:1.1em">${prod.name}</div>
+          <div style="color:#8b9ab5;font-size:0.98em">${prod.shortDesc || ''}</div>
+          <div style="color:#3b82f6;font-size:1em;font-weight:600">${prod.price} €</div>
+        </div>
+      </div>`;
+    });
+    productsList.innerHTML = html;
+  }
+});
 // --- Restriction des jours de réservation selon la config admin ---
 // --- Gestion calendrier mensuel de disponibilités admin ---
 const AVAILABLE_DATES_KEY = 'chiino_available_dates_v1';

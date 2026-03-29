@@ -1,11 +1,8 @@
 // --- Restriction des jours de réservation selon la config admin ---
 // --- Gestion calendrier mensuel de disponibilités admin ---
 const AVAILABLE_DATES_KEY = 'chiino_available_dates_v1';
-// Format: [{date: 'YYYY-MM-DD', slots: ['matin','aprem','soiree']}, ...]
+// Format: [{date: 'YYYY-MM-DD', slots: ['matin','apres-midi','soiree']}, ...]
 let availableDatesState = [];
-function loadAvailableDatesState() {
-  availableDatesState = readJsonStorage(AVAILABLE_DATES_KEY, []);
-}
 
 function getCurrentPeriodRange() {
   // Retourne [dateDébut, dateFin] pour la période aujourd'hui -> aujourd'hui + 1 mois
@@ -19,7 +16,6 @@ function getCurrentPeriodRange() {
 function renderAdminAvailableCalendar() {
   const calendarDiv = document.getElementById('admin-available-calendar');
   if (!calendarDiv) return;
-  loadAvailableDatesState();
   const [startDate, endDate] = getCurrentPeriodRange();
   const daysShort = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
   let html = '';
@@ -177,23 +173,8 @@ function isDayAvailableForReservation(date, slot) {
   const key = date.toISOString().slice(0,10);
   const obj = availableDates.find(obj => obj.date === key);
   if (!obj) return false;
-  // Si pas de slot précisé, on vérifie qu'au moins un slot est dispo ET non réservé
-  if (!slot) {
-    return ['matin','aprem','soiree'].some(s => obj.slots.includes(s) && !isSlotOccupied(key, s));
-  }
-  // On vérifie que le slot est dispo ET non réservé
-  return obj.slots.includes(slot) && !isSlotOccupied(key, slot);
-}
-
-function isSlotOccupied(dateKey, slot) {
-  // Vérifie si un créneau (date+slot) est déjà réservé dans le planning
-  // slot: 'matin'|'aprem'|'soiree'
-  // On considère qu'une entrée planning occupe le slot si la date correspond et la période aussi
-  const entries = Array.isArray(scheduleEntriesState) ? scheduleEntriesState : [];
-  return entries.some(entry => {
-    if (!entry.date || !entry.period) return false;
-    return entry.date === dateKey && entry.period === slot;
-  });
+  if (!slot) return true;
+  return obj.slots.includes(slot);
 }
 
 
@@ -212,9 +193,9 @@ function updateReservationDayInput() {
     const current = periodSelect.value;
     periodSelect.innerHTML = '<option value="">Choisir un moment</option>';
     if (obj && Array.isArray(obj.slots)) {
-      if (obj.slots.includes('matin') && !isSlotOccupied(key, 'matin')) periodSelect.innerHTML += '<option value="matin">Matin</option>';
-      if (obj.slots.includes('aprem') && !isSlotOccupied(key, 'aprem')) periodSelect.innerHTML += '<option value="aprem">Après-midi</option>';
-      if (obj.slots.includes('soiree') && !isSlotOccupied(key, 'soiree')) periodSelect.innerHTML += '<option value="soiree">Soirée</option>';
+      if (obj.slots.includes('matin')) periodSelect.innerHTML += '<option value="matin">Matin</option>';
+      if (obj.slots.includes('apres-midi')) periodSelect.innerHTML += '<option value="apres-midi">Après-midi</option>';
+      if (obj.slots.includes('soiree')) periodSelect.innerHTML += '<option value="soiree">Soirée</option>';
     }
     if (obj && obj.slots.includes(current)) periodSelect.value = current;
     else periodSelect.value = '';
@@ -1473,7 +1454,6 @@ function initAdminBackoffice() {
   const calendarSaved = document.getElementById('admin-available-calendar-saved');
   const saveCalendarBtn = document.getElementById('admin-save-available-calendar');
   if (calendarWrap) {
-    loadAvailableDatesState();
     bindAdminAvailableCalendar();
     saveCalendarBtn?.addEventListener('click', function(e) {
       e.preventDefault();

@@ -1,3 +1,58 @@
+/* Titres avec Syne */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+/* ── POLICES SYNE ── */
+@font-face {
+  font-family: 'Syne';
+  src: url('Assets/Syne/Syne-Regular.woff2') format('woff2'),
+       url('Assets/Syne/Syne-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Syne';
+  src: url('Assets/Syne/Syne-Medium.woff2') format('woff2'),
+       url('Assets/Syne/Syne-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Syne';
+  src: url('Assets/Syne/Syne-SemiBold.woff2') format('woff2'),
+       url('Assets/Syne/Syne-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Syne';
+  src: url('Assets/Syne/Syne-Bold.woff2') format('woff2'),
+       url('Assets/Syne/Syne-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Syne';
+  src: url('Assets/Syne/Syne-ExtraBold.woff2') format('woff2'),
+       url('Assets/Syne/Syne-ExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+/* Variable font (optionnel) */
+@font-face {
+  font-family: 'Syne';
+  src: url('Assets/Syne/Syne-VariableFont_wght.ttf') format('truetype');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
 /* Disponibilités admin */
 .dispo-calendar {
   display: grid;

@@ -1362,62 +1362,41 @@ function renderAdminLists() {
   const featuredList = document.getElementById('admin-featured-list');
   if (!defaultProductList || !defaultRealList) return;
 
-  const products = customProductsState;
-  const reals = customRealisationsState;
-  const hiddenDefaultProducts = hiddenDefaultProductsState;
-  const hiddenDefaultReals = hiddenDefaultRealisationsState;
-
-  const defaultProductRows = DEFAULT_PRODUCT_ITEMS.map((item) => {
-    const merged = getMergedDefaultProduct(item.id) || item;
-    const hidden = hiddenDefaultProducts.includes(item.id);
-    return '<div class="admin-row"><div><strong>' + escapeHtml(merged.name) + '</strong><span>' + escapeHtml(item.id) + '</span></div><div class="admin-row-actions"><button class="add-btn" data-edit-default-product="' + escapeHtml(item.id) + '">Modifier</button><button class="add-btn" data-toggle-default-product="' + escapeHtml(item.id) + '">' + (hidden ? 'Restaurer' : 'Supprimer') + '</button></div></div>';
+  // Afficher tous les produits (custom + défaut) via allProductsState
+  const allProducts = allProductsState;
+  const productRows = allProducts.map((item) => {
+    const isCustom = item.id && item.id.startsWith('prod-');
+    const label = isCustom ? 'Personnalisé' : 'Défaut';
+    return '<div class="admin-row"><div><strong>' + escapeHtml(item.name) + '</strong><span>' + label + ' • ' + escapeHtml(item.category || '') + ' • ' + Number(item.price).toFixed(2).replace('.', ',') + '€</span></div><div class="admin-row-actions">'
+      + (isCustom
+        ? '<button class="add-btn" data-edit-product="' + escapeHtml(item.id) + '">Modifier</button><button class="add-btn" data-remove-product="' + escapeHtml(item.id) + '">Supprimer</button>'
+        : '<button class="add-btn" data-edit-default-product="' + escapeHtml(item.id) + '">Modifier</button><button class="add-btn" data-toggle-default-product="' + escapeHtml(item.id) + '">' + (item.hidden ? 'Restaurer' : 'Supprimer') + '</button>')
+      + '</div></div>';
   });
-
-  const customProductRows = products.map((item) => {
-    return '<div class="admin-row"><div><strong>' + escapeHtml(item.name) + '</strong><span>Personnalisé • ' + escapeHtml(item.category) + ' • ' + Number(item.price).toFixed(2).replace('.', ',') + '€</span></div><div class="admin-row-actions"><button class="add-btn" data-edit-product="' + escapeHtml(item.id) + '">Modifier</button><button class="add-btn" data-remove-product="' + escapeHtml(item.id) + '">Supprimer</button></div></div>';
-  });
-
-  defaultProductList.innerHTML = defaultProductRows.concat(customProductRows).join('');
+  defaultProductList.innerHTML = productRows.join('');
 
   if (featuredProductsList) {
-    const options = getMergedDefaultProductsCatalog()
-      .filter((item) => !hiddenDefaultProducts.includes(item.id))
-      .concat(
-        customProductsState.map((item) => ({
-          id: item.id,
-          name: item.name,
-          category: item.category
-        }))
-      );
-
-    featuredProductsList.innerHTML = options.map((item) => {
+    featuredProductsList.innerHTML = allProducts.map((item) => {
       const checked = getEffectiveFeaturedProductIds().includes(item.id) ? 'checked' : '';
       return '<label class="admin-row"><div><strong>' + escapeHtml(item.name || 'Produit') + '</strong><span>' + escapeHtml(item.category || 'Produit') + '</span></div><input type="checkbox" data-featured-product-id="' + escapeHtml(item.id) + '" ' + checked + '></label>';
     }).join('');
   }
 
-  const defaultRealRows = DEFAULT_REALISATION_ITEMS.map((item) => {
-    const merged = getMergedDefaultRealisation(item.id) || item;
-    const hidden = hiddenDefaultReals.includes(item.id);
-    return '<div class="admin-row"><div><strong>' + escapeHtml(merged.title || merged.name) + '</strong><span>' + escapeHtml(item.id) + '</span></div><div class="admin-row-actions"><button class="add-btn" data-edit-default-real="' + escapeHtml(item.id) + '">Modifier</button><button class="add-btn" data-toggle-default-real="' + escapeHtml(item.id) + '">' + (hidden ? 'Restaurer' : 'Supprimer') + '</button></div></div>';
+  // Afficher toutes les réalisations (custom + défaut) via allRealisationsState
+  const allReals = allRealisationsState;
+  const realRows = allReals.map((item) => {
+    const isCustom = item.id && item.id.startsWith('real-');
+    const label = isCustom ? 'Personnalisé' : 'Défaut';
+    return '<div class="admin-row"><div><strong>' + escapeHtml(item.title || item.name) + '</strong><span>' + label + ' • ' + escapeHtml(item.style || '') + '</span></div><div class="admin-row-actions">'
+      + (isCustom
+        ? '<button class="add-btn" data-edit-real="' + escapeHtml(item.id) + '">Modifier</button><button class="add-btn" data-remove-real="' + escapeHtml(item.id) + '">Supprimer</button>'
+        : '<button class="add-btn" data-edit-default-real="' + escapeHtml(item.id) + '">Modifier</button><button class="add-btn" data-toggle-default-real="' + escapeHtml(item.id) + '">' + (item.hidden ? 'Restaurer' : 'Supprimer') + '</button>')
+      + '</div></div>';
   });
-
-  const customRealRows = reals.map((item) => {
-    return '<div class="admin-row"><div><strong>' + escapeHtml(item.title) + '</strong><span>Personnalisé • ' + escapeHtml(item.style) + '</span></div><div class="admin-row-actions"><button class="add-btn" data-edit-real="' + escapeHtml(item.id) + '">Modifier</button><button class="add-btn" data-remove-real="' + escapeHtml(item.id) + '">Supprimer</button></div></div>';
-  });
-
-  defaultRealList.innerHTML = defaultRealRows.concat(customRealRows).join('');
+  defaultRealList.innerHTML = realRows.join('');
 
   if (featuredList) {
-    const options = getMergedDefaultRealisationsCatalog().concat(
-      customRealisationsState.map((item) => ({
-        id: item.id,
-        title: item.title,
-        style: item.style
-      }))
-    );
-
-    featuredList.innerHTML = options.map((item) => {
+    featuredList.innerHTML = allReals.map((item) => {
       const checked = getEffectiveFeaturedRealisationIds().includes(item.id) ? 'checked' : '';
       return '<label class="admin-row"><div><strong>' + escapeHtml(item.title || item.name) + '</strong><span>' + escapeHtml(item.style || '') + '</span></div><input type="checkbox" data-featured-id="' + escapeHtml(item.id) + '" ' + checked + '></label>';
     }).join('');
@@ -1425,7 +1404,6 @@ function renderAdminLists() {
 
   renderAdminOrders();
   renderAdminSchedulePlanner();
-
 }
 
 function initAdminBackoffice() {

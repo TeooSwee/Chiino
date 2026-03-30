@@ -785,9 +785,9 @@ nav > a:active{
 }
 .admin-feedback.show{display:block}
 .admin-feedback.ok{
-  border-color:rgba(59,130,246,.35);
-  background:rgba(13,31,60,.5);
-  color:var(--paper);
+  border-color:rgba(34,197,94,.45); /* vert */
+  background:rgba(34,197,94,.13); /* vert clair */
+  color:#d1fae5;
 }
 .admin-feedback.err{
   border-color:rgba(239,68,68,.45);

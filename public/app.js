@@ -1,3 +1,25 @@
+// --- Redirection sur clic des produits best-sellers vers la boutique ---
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.home-best-card').forEach(function(card) {
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', function(e) {
+      // Évite double navigation si bouton "Voir" cliqué
+      if (e.target.closest('button')) return;
+      window.location.href = 'boutique.html';
+    });
+  });
+});
+// --- Redirection sur clic du badge "prochain créneau" ---
+document.addEventListener('DOMContentLoaded', function() {
+  var badge = document.querySelector('.hero-badge');
+  if (badge) {
+    badge.style.cursor = 'pointer';
+    badge.title = 'Voir les créneaux de réservation';
+    badge.addEventListener('click', function() {
+      window.location.href = 'reservation.html';
+    });
+  }
+});
 // --- Restriction des jours de réservation selon la config admin ---
 // --- Gestion calendrier mensuel de disponibilités admin ---
 const AVAILABLE_DATES_KEY = 'chiino_available_dates_v1';

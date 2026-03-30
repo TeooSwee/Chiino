@@ -102,6 +102,21 @@ function readAdminContent() {
   const products = readJsonFileSafe(productsFile, { customProducts: [], hiddenDefaultProducts: [], defaultProductOverrides: {}, featuredProducts: [] });
   const reals = readJsonFileSafe(realisationsFile, { customRealisations: [], hiddenDefaultRealisations: [], defaultRealisationOverrides: {}, featuredRealisations: [] });
   const schedule = readJsonFileSafe(scheduleFile, { scheduleEntries: [] });
+  // Fusionner customProducts + produits par défaut (featured + overrides)
+  const defaultProducts = Object.entries(products.defaultProductOverrides || {}).map(([id, prod]) => ({ id, ...prod }));
+  const featuredProductIds = asArray(products.featuredProducts);
+  const allProducts = [
+    ...asArray(products.customProducts),
+    ...defaultProducts.filter(p => featuredProductIds.includes(p.id))
+  ];
+
+  const defaultRealisations = Object.entries(reals.defaultRealisationOverrides || {}).map(([id, real]) => ({ id, ...real }));
+  const featuredRealsIds = asArray(reals.featuredRealisations);
+  const allRealisations = [
+    ...asArray(reals.customRealisations),
+    ...defaultRealisations.filter(r => featuredRealsIds.includes(r.id))
+  ];
+
   return {
     customProducts: asArray(products.customProducts),
     customRealisations: asArray(reals.customRealisations),
@@ -111,7 +126,9 @@ function readAdminContent() {
     defaultRealisationOverrides: (reals.defaultRealisationOverrides && typeof reals.defaultRealisationOverrides === 'object') ? reals.defaultRealisationOverrides : {},
     featuredProducts: asArray(products.featuredProducts),
     featuredRealisations: asArray(reals.featuredRealisations),
-    scheduleEntries: asArray(schedule.scheduleEntries)
+    scheduleEntries: asArray(schedule.scheduleEntries),
+    allProducts,
+    allRealisations
   };
 }
 

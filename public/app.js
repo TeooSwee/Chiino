@@ -401,6 +401,8 @@ let defaultRealisationOverridesState = {};
 let featuredProductsState = [];
 let featuredRealisationsState = [];
 let scheduleEntriesState = [];
+let allProductsState = [];
+let allRealisationsState = [];
 let ordersState = [];
 let adminPlannerWeekStartState = null;
 let editingProductId = null;
@@ -526,6 +528,8 @@ function applyContentState(content) {
   featuredProductsState = asArray(content.featuredProducts);
   featuredRealisationsState = asArray(content.featuredRealisations);
   scheduleEntriesState = asArray(content.scheduleEntries);
+  allProductsState = asArray(content.allProducts);
+  allRealisationsState = asArray(content.allRealisations);
 }
 
 function asArray(value) {
@@ -995,8 +999,8 @@ function renderCustomProducts() {
     }
   });
 
-  const customProducts = customProductsState;
-  customProducts.forEach((item) => {
+  const allProducts = allProductsState;
+  allProducts.forEach((item) => {
     if (!item || !item.name || !Number.isFinite(Number(item.price))) return;
     grid.appendChild(buildCustomProductCard(item));
   });
@@ -1022,8 +1026,8 @@ function renderCustomRealisations() {
     }
   });
 
-  const customReals = customRealisationsState;
-  customReals.forEach((item, index) => {
+  const allReals = allRealisationsState;
+  allReals.forEach((item, index) => {
     if (!item || !item.title) return;
     grid.appendChild(buildCustomRealisationCard(item, index));
   });

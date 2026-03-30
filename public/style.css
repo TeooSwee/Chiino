@@ -1,5 +1,33 @@
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Inter:wght@300;400;500&display=swap');
+/* Forcer Syne sur tous les titres */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Syne', sans-serif !important;
+  font-weight: 800;
+}
+/* Harmonisation champ date custom réservation */
+.same-style-as-other-fields {
+  background: var(--bleu);
+  border: 1px solid var(--border);
+  color: var(--paper);
+  padding: 10px 12px;
+  font-family: 'Inter',sans-serif;
+  font-size: 12px;
+  border-radius: 4px;
+  outline: none;
+  font-weight: 400;
+  transition: border-color .2s;
+}
+.same-style-as-other-fields:focus {
+  border-color: var(--accent);
+}
 *{box-sizing:border-box;margin:0;padding:0}
+/* Forcer Syne sur tout le calendrier custom */
+.custom-calendar-popup, .custom-calendar-popup * {
+  font-family: 'Syne', sans-serif !important;
+}
+.custom-cal-month, .custom-cal-month-label, .custom-cal-weekdays, .custom-cal-weekday {
+  font-family: 'Syne', sans-serif !important;
+}
 :root{
   --noir:#0a0a0f;
   --bleu:#0d1f3c;

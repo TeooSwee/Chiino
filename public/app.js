@@ -1,3 +1,71 @@
+// --- Déconnexion admin + affichage conditionnel du bouton ---
+// Variable globale pour la sélection des moments de la journée dans le calendrier custom
+let selectedMomentsState = [];
+document.addEventListener('DOMContentLoaded', function() {
+  // Masquer le panneau admin si pas de session
+  var panel = document.getElementById('admin-panel');
+  var loginWrap = document.getElementById('admin-login-wrap');
+  var adminSession = localStorage.getItem('chiino_admin_session_v1');
+  if (panel && loginWrap) {
+    if (!adminSession) {
+      panel.style.display = 'none';
+      loginWrap.style.display = '';
+    } else {
+      panel.style.display = '';
+      loginWrap.style.display = 'none';
+    }
+  }
+
+  var logoutBtn = document.getElementById('admin-logout-btn');
+  var logoutWrap = document.getElementById('admin-logout-wrap');
+  var loginWrap = document.getElementById('admin-login-wrap');
+  var adminHome = document.getElementById('admin-home');
+
+  function updateLogoutBtnVisibility() {
+    if (logoutWrap && adminHome) {
+      // Affiche le bouton uniquement si la page d'accueil admin est visible
+      const isHomeVisible = adminHome.offsetParent !== null;
+      logoutWrap.style.display = isHomeVisible ? 'flex' : 'none';
+    }
+  }
+
+  // Observer les changements de visibilité de la page d'accueil admin
+  if (adminHome) {
+    const observer = new MutationObserver(updateLogoutBtnVisibility);
+    observer.observe(adminHome, { attributes: true, attributeFilter: ['style', 'class'] });
+    updateLogoutBtnVisibility();
+  }
+
+  // Affiche le bouton de déconnexion dès la connexion réussie
+  var loginBtn = document.getElementById('admin-login-btn');
+  if (loginBtn && logoutWrap && adminHome) {
+    loginBtn.addEventListener('click', function() {
+      setTimeout(function() {
+        // Si la page d'accueil admin est visible après connexion, afficher le bouton
+        if (adminHome.offsetParent !== null) {
+          logoutWrap.style.display = 'flex';
+        }
+      }, 300);
+    });
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', function() {
+      // Suppression du token/session admin (clé locale)
+      localStorage.removeItem('chiino_admin_session_v1');
+      localStorage.removeItem('chiino_admin_password_v1');
+      // Affiche le formulaire de connexion et masque le panneau admin
+      if (loginWrap) loginWrap.style.display = '';
+      if (panel) panel.style.display = 'none';
+      if (logoutWrap) logoutWrap.style.display = 'none';
+      // Optionnel : reset du champ mot de passe
+      var pwd = document.getElementById('admin-password');
+      if (pwd) pwd.value = '';
+      // Scroll en haut pour UX
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+});
 // --- Redirection sur clic des produits best-sellers vers la boutique ---
 document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('.home-best-card').forEach(function(card) {
@@ -33,38 +101,112 @@ function getCurrentMonthYear() {
 function renderAdminAvailableCalendar() {
   const calendarDiv = document.getElementById('admin-available-calendar');
   if (!calendarDiv) return;
-  const { month, year } = getCurrentMonthYear();
+
+  // Stocker le mois/année courant dans le DOM pour navigation
+  if (!calendarDiv.dataset.month || !calendarDiv.dataset.year) {
+    // Si aujourd'hui, on affiche le mois du lendemain par défaut
+    const now = new Date();
+    let month = now.getMonth();
+    let year = now.getFullYear();
+    // Si on est le dernier jour du mois, passer au mois suivant
+    if (now.getDate() === new Date(year, month + 1, 0).getDate()) {
+      month++;
+      if (month > 11) {
+        month = 0;
+        year++;
+      }
+    }
+    calendarDiv.dataset.month = month;
+    calendarDiv.dataset.year = year;
+  }
+  let month = parseInt(calendarDiv.dataset.month, 10);
+  let year = parseInt(calendarDiv.dataset.year, 10);
+
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
   const daysInMonth = lastDay.getDate();
-  let html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">';
+  const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  let html = `<div style="display:flex;align-items:center;justify-content:center;margin-bottom:8px;gap:12px">
+    <button id="admin-cal-prev" style="background:none;border:none;color:var(--accent);font-size:18px;cursor:pointer">&#8592;</button>
+    <span style="font-weight:bold;font-size:15px">${monthNames[month]} ${year}</span>
+    <button id="admin-cal-next" style="background:none;border:none;color:var(--accent);font-size:18px;cursor:pointer">&#8594;</button>
+  </div>`;
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">';
   const weekDays = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
   weekDays.forEach(d => html += `<div style='font-weight:bold'>${d}</div>`);
   let start = firstDay.getDay();
   start = start === 0 ? 6 : start - 1; // Lundi=0
   for (let i = 0; i < start; i++) html += '<div></div>';
+  const today = new Date();
   for (let d = 1; d <= daysInMonth; d++) {
+    const dateObj = new Date(year, month, d);
     const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const checked = availableDatesState.includes(dateKey);
-    html += `<label style='cursor:pointer'><input type='checkbox' class='admin-available-date' value='${dateKey}' ${checked ? 'checked' : ''}>${d}</label>`;
+    // Désactiver les jours <= aujourd'hui + 2
+    let disabled = false;
+    // Calculer la date limite (aujourd'hui + 2 jours)
+    const limitDate = new Date(today);
+    limitDate.setDate(today.getDate() + 2);
+    if (
+      dateObj <= limitDate
+    ) {
+      disabled = true;
+    }
+    // Style carré bleu sélectionnable
+    let style = `display:flex;align-items:center;justify-content:center;width:32px;height:32px;margin:2px auto;border-radius:7px;font-weight:bold;font-size:15px;cursor:pointer;user-select:none;`;
+    if (disabled) {
+      style += 'background:#e0e0e0;color:#aaa;cursor:not-allowed;';
+    } else if (checked) {
+      style += 'background:#2196f3;color:#fff;box-shadow:0 0 0 2px #1976d2;';
+    } else {
+      style += 'background:#e3f2fd;color:#1976d2;';
+    }
+    html += `<div class='admin-available-day' data-date='${dateKey}' data-disabled='${disabled}' style='${style}'>${d}</div>`;
   }
   html += '</div>';
   calendarDiv.innerHTML = html;
+
+  // Navigation mois précédent/suivant
+  document.getElementById('admin-cal-prev').onclick = function() {
+    month--;
+    if (month < 0) { month = 11; year--; }
+    calendarDiv.dataset.month = month;
+    calendarDiv.dataset.year = year;
+    renderAdminAvailableCalendar();
+  };
+  document.getElementById('admin-cal-next').onclick = function() {
+    month++;
+    if (month > 11) { month = 0; year++; }
+    calendarDiv.dataset.month = month;
+    calendarDiv.dataset.year = year;
+    renderAdminAvailableCalendar();
+  };
 }
 
 function bindAdminAvailableCalendar() {
   renderAdminAvailableCalendar();
   const calendarDiv = document.getElementById('admin-available-calendar');
   if (!calendarDiv) return;
-  calendarDiv.addEventListener('change', function(e) {
-    if (e.target.classList.contains('admin-available-date')) {
-      const val = e.target.value;
-      if (e.target.checked) {
-        if (!availableDatesState.includes(val)) availableDatesState.push(val);
-      } else {
-        availableDatesState = availableDatesState.filter(d => d !== val);
-      }
+  calendarDiv.addEventListener('click', function(e) {
+    const dayDiv = e.target.closest('.admin-available-day');
+    if (!dayDiv) return;
+    const date = dayDiv.dataset.date;
+    const disabled = dayDiv.dataset.disabled === 'true';
+    if (disabled) return;
+    const idx = availableDatesState.indexOf(date);
+    if (idx === -1) {
+      availableDatesState.push(date);
+      dayDiv.style.background = '#2196f3';
+      dayDiv.style.color = '#fff';
+      dayDiv.style.boxShadow = '0 0 0 2px #1976d2';
+    } else {
+      availableDatesState.splice(idx, 1);
+      dayDiv.style.background = '#e3f2fd';
+      dayDiv.style.color = '#1976d2';
+      dayDiv.style.boxShadow = '';
     }
+    // Sauvegarder la sélection dans le localStorage
+    writeJsonStorage(AVAILABLE_DATES_KEY, availableDatesState);
   });
 }
 
@@ -112,7 +254,296 @@ function updateReservationDayInput() {
 }
 
 if (window.location.pathname.endsWith('reservation.html')) {
-  document.addEventListener('DOMContentLoaded', updateReservationDayInput);
+  document.addEventListener('DOMContentLoaded', function() {
+    // Désactive le champ natif, affiche le calendrier custom
+    const dayInput = document.getElementById('reservation-day');
+    const momentInput = document.getElementById('reservation-moment-visible');
+    const popup = document.getElementById('custom-calendar-popup');
+    const calContainer = document.getElementById('custom-calendar-container');
+    if (!dayInput || !popup || !calContainer) return;
+
+    // Permet d'ouvrir le calendrier aussi en cliquant sur le champ moment de la journée
+    if (momentInput) {
+      momentInput.addEventListener('click', function(e) {
+        e.preventDefault();
+        // Reset les moments sélectionnés à chaque ouverture
+        selectedMomentsState = [];
+        const formMomentInput = document.getElementById('reservation-moment');
+        if (formMomentInput) formMomentInput.value = '';
+        const formMomentVisible = document.getElementById('reservation-moment-visible');
+        if (formMomentVisible) formMomentVisible.value = '';
+        popup.style.display = 'flex';
+        renderCustomCalendar(dayInput.value);
+      });
+    }
+
+    function renderCustomCalendar(selectedDateStr) {
+      // Récupère les jours disponibles
+      const availableDates = readJsonStorage(AVAILABLE_DATES_KEY, []);
+      // Mois/année affichés (par défaut, mois du lendemain ou du jour si aucun selected)
+      let month, year;
+      // Ne jamais pré-sélectionner de date
+      // On ignore selectedDateStr pour la sélection visuelle
+      if (selectedDateStr && selectedDateStr !== '') {
+        const d = new Date(selectedDateStr);
+        month = d.getMonth();
+        year = d.getFullYear();
+      } else {
+        const now = new Date();
+        month = now.getMonth();
+        year = now.getFullYear();
+        if (now.getDate() === new Date(year, month + 1, 0).getDate()) {
+          month++;
+          if (month > 11) { month = 0; year++; }
+        }
+      }
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const daysInMonth = lastDay.getDate();
+      const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+      let html = `<div style=\"background:var(--noir);border-radius:16px;padding:24px 18px;box-shadow:0 4px 24px #0004;width:430px;min-width:430px;max-width:430px;min-height:420px;height:420px;margin:0 auto;display:flex;flex-direction:column;justify-content:flex-start;\">`;
+      html += `<div class=\"custom-cal-month\" style=\"display:flex;align-items:center;justify-content:center;margin-bottom:12px;gap:18px;white-space:nowrap;width:370px;max-width:370px;min-width:370px;\">\n        <button id=\"custom-cal-prev\" style=\"background:none;border:none;color:#fff;font-size:28px;font-weight:bold;cursor:pointer;padding:0 8px;flex:0 0 48px;\">&#8592;</button>\n        <span class=\"custom-cal-month-label\" style=\"font-weight:900;font-size:22px;color:#fff;letter-spacing:1px;white-space:nowrap;flex:1;text-align:center;\">${monthNames[month]} ${year}</span>\n        <button id=\"custom-cal-next\" style=\"background:none;border:none;color:#fff;font-size:28px;font-weight:bold;cursor:pointer;padding:0 8px;flex:0 0 48px;\">&#8594;</button>\n      </div>`;
+      html += '<div class=\"custom-cal-weekdays\" style=\"display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;margin-bottom:8px;\">';
+      const weekDays = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+      weekDays.forEach(d => html += `<div class='custom-cal-weekday' style='font-weight:700;font-size:15px;color:var(--accent);background:var(--bleu2);border-radius:5px;padding:2px 0;'>${d}</div>`);
+      let start = firstDay.getDay();
+      start = start === 0 ? 6 : start - 1;
+      for (let i = 0; i < start; i++) html += '<div></div>';
+      const today = new Date();
+      // Calcul de la date min réservable (aujourd'hui + 2 jours)
+      const minDate = new Date(today);
+      minDate.setDate(minDate.getDate() + 2);
+      minDate.setHours(0,0,0,0);
+      // Stocker la première date sélectionnée
+      if (!window.firstSelectedReservationDate) {
+        window.firstSelectedReservationDate = dayInput.value || '';
+      }
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateObj = new Date(year, month, d);
+        const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const isAvailable = availableDates.includes(dateKey);
+        let disabled = false;
+        if (dateObj <= minDate) {
+          disabled = true;
+        }
+        let style = `display:flex;align-items:center;justify-content:center;width:38px;height:38px;margin:3px auto;border-radius:9px;font-weight:900;font-size:17px;cursor:pointer;user-select:none;transition:background 0.15s,color 0.15s,box-shadow 0.15s;box-shadow:0 1px 4px #0004;`;
+        const isToday = dateObj.getFullYear() === today.getFullYear() && dateObj.getMonth() === today.getMonth() && dateObj.getDate() === today.getDate();
+        // Correction : la sélection dépend de dayInput.value
+        const isSelected = dayInput && dayInput.value === dateKey;
+        if (disabled || !isAvailable) {
+          style += 'background:var(--bleu2);color:var(--muted);cursor:not-allowed;opacity:0.6;';
+        } else if (isSelected) {
+          style += 'background:var(--bleu);color:#fff;border:2.5px solid var(--accent);';
+        } else {
+          style += 'background:var(--bleu);color:#fff;border:none;';
+        }
+        if (isToday) {
+          style += 'outline:2.5px solid #ff9800;outline-offset:2px;';
+        }
+        html += `<div class='custom-cal-day' data-date='${dateKey}' data-disabled='${disabled || !isAvailable}' style='${style}'>${d}</div>`;
+      }
+      html += '</div></div>';
+      // Réduit l'espace entre la grille des dates et le moment de la journée
+      html += '<div style="height:10px;"></div>';
+      // Ajout du choix du moment de la journée
+      const moments = [
+        { value: 'matin', label: 'Matin', icon: '☀️' },
+        { value: 'apres-midi', label: 'Après-midi', icon: '🌤️' },
+        { value: 'soiree', label: 'Soirée', icon: '🌙' }
+      ];
+      html += `<div style='margin:14px 0 0 0;text-align:center;'>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;color:var(--accent);font-size:15px;margin-bottom:7px;">Moment de la journée</div>
+        <div id='custom-cal-moment-group' style='display:flex;justify-content:center;gap:12px;'>
+          ${moments.map(m => `
+            <button type='button' class='moment-btn${selectedMomentsState.includes(m.value) ? ' selected' : ''}' data-moment='${m.value}' style="background:${selectedMomentsState.includes(m.value) ? 'var(--accent)' : 'var(--bleu)'};border:2px solid ${selectedMomentsState.includes(m.value) ? '#fff' : 'var(--accent)'};border-radius:8px;padding:10px 16px;font-size:16px;color:#fff;cursor:pointer;transition:all 0.15s;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:'Syne',sans-serif;font-weight:700;">
+              <span style='font-size:22px;line-height:1;'>${m.icon}</span>
+              <span>${m.label}</span>
+            </button>
+          `).join('')}
+        </div>
+        <input type='hidden' id='custom-cal-moment' value=''>
+        <div style='display:flex;justify-content:space-between;margin-top:14px;'>
+          <button id='calendar-validate-btn' style='background:var(--accent);color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:16px;font-weight:bold;cursor:pointer;'>Valider</button>
+          <button id='custom-cal-close' style='background:none;border:none;color:var(--accent);font-weight:bold;font-size:15px;cursor:pointer'>Annuler</button>
+        </div>
+      </div>`;
+      calContainer.innerHTML = html;
+      // Appliquer la police Syne aux jours et aux mois
+      setTimeout(() => {
+        calContainer.querySelectorAll('.custom-cal-day').forEach(el => {
+          el.style.fontFamily = "'Syne',sans-serif";
+        });
+        // Appliquer aussi aux noms de jours et mois
+        calContainer.querySelectorAll('button, .custom-cal-month, .custom-cal-weekdays > div').forEach(el => {
+          el.style.fontFamily = "'Syne',sans-serif";
+        });
+      }, 0);
+
+      // Appliquer le fond noir au container du calendrier
+      calContainer.style.background = 'var(--noir)';
+      calContainer.style.color = 'var(--paper)';
+      const validateBtn = document.getElementById('calendar-validate-btn');
+      if (validateBtn) {
+        validateBtn.onclick = function() {
+          const selectedDate = dayInput.value?.trim() || '';
+          // Récupérer les moments sélectionnés (tableau)
+          const selectedMoments = Array.from(document.querySelectorAll('.moment-btn.selected')).map(btn => btn.dataset.moment);
+          if (!selectedDate && selectedMoments.length < 1) {
+            alert('Merci de choisir une date et au moins 1 moment de la journée.');
+            return;
+          }
+          if (!selectedDate) {
+            alert('Merci de choisir une date.');
+            return;
+          }
+          if (selectedMoments.length < 1) {
+            alert('Merci de sélectionner au moins 1 moment de la journée.');
+            return;
+          }
+          if (selectedMoments.length > 3) {
+            alert('Vous pouvez sélectionner au maximum 3 moments de la journée.');
+            return;
+          }
+          // Si tout est ok, remplir le champ caché du formulaire (valeurs séparées par virgule)
+          const formMomentInput = document.getElementById('reservation-moment');
+          if (formMomentInput) formMomentInput.value = selectedMoments.join(',');
+                    // Mettre à jour le champ visible
+                    const formMomentVisible = document.getElementById('reservation-moment-visible');
+                    if (formMomentVisible) formMomentVisible.value = selectedMoments.map(m => {
+                      if (m === 'matin') return 'Matin';
+                      if (m === 'apres-midi') return 'Après-midi';
+                      if (m === 'soiree') return 'Soirée';
+                      return m;
+                    }).join(', ');
+          popup.style.display = 'none';
+          dayInput.dispatchEvent(new Event('input'));
+        };
+      }
+
+      // Navigation
+      document.getElementById('custom-cal-prev').onclick = function() {
+        month--;
+        if (month < 0) { month = 11; year--; }
+        renderCustomCalendar(`${year}-${String(month+1).padStart(2,'0')}-01`);
+      };
+      document.getElementById('custom-cal-next').onclick = function() {
+        month++;
+        if (month > 11) { month = 0; year++; }
+        renderCustomCalendar(`${year}-${String(month+1).padStart(2,'0')}-01`);
+      };
+      document.getElementById('custom-cal-close').onclick = function() {
+        popup.style.display = 'none';
+      };
+      // Sélection jour
+      calContainer.querySelectorAll('.custom-cal-day').forEach(function(dayDiv) {
+        // Met à jour l'affichage de la sélection en temps réel
+        function updateSelectionFeedback() {
+          const feedback = document.getElementById('custom-cal-selection-feedback');
+          if (!feedback) return;
+          const moments = Array.from(calContainer.querySelectorAll('.moment-btn.selected')).map(b => b.textContent.trim()).join(', ');
+          let txt = '';
+          if (moments) txt += `<b>Moment :</b> ${moments}`;
+          feedback.innerHTML = txt;
+        }
+        // Initialiser l'affichage à l'ouverture
+        updateSelectionFeedback();
+        if (dayDiv.dataset.disabled === 'true') return;
+        dayDiv.onclick = function() {
+          // Désélection si déjà sélectionnée
+          if (dayInput.value === dayDiv.dataset.date) {
+            setDateFromCalendar('');
+          } else {
+            setDateFromCalendar(dayDiv.dataset.date);
+          }
+          // Forcer le rerender pour garantir la cohérence visuelle, mais rester sur le même mois
+          const currentMonth = month;
+          const currentYear = year;
+          renderCustomCalendar(`${currentYear}-${String(currentMonth+1).padStart(2,'0')}-01`);
+          updateSelectionFeedback();
+        };
+      });
+      // Gestion sélection multiple des moments
+      const momentBtns = calContainer.querySelectorAll('.moment-btn');
+      const momentInput = calContainer.querySelector('#custom-cal-moment');
+      momentBtns.forEach(btn => {
+        // Style initial : fond bleu foncé
+        btn.style.background = 'var(--bleu)';
+        btn.style.borderColor = 'var(--accent)';
+        btn.onclick = function(e) {
+          e.preventDefault();
+          const isSelected = btn.classList.contains('selected');
+          let selectedBtns = Array.from(momentBtns).filter(b => b.classList.contains('selected'));
+          if (!isSelected && selectedBtns.length >= 3) {
+            alert('Vous pouvez sélectionner au maximum 3 moments de la journée.');
+            return;
+          }
+          btn.classList.toggle('selected');
+          // Appliquer l'indice visuel JS (pour garantir la synchro)
+          if (btn.classList.contains('selected')) {
+            btn.style.background = 'var(--accent)';
+            btn.style.borderColor = '#fff';
+          } else {
+            btn.style.background = 'var(--bleu)';
+            btn.style.borderColor = 'var(--accent)';
+          }
+          selectedBtns = Array.from(momentBtns).filter(b => b.classList.contains('selected'));
+          // Mettre à jour le champ caché avec la liste des moments sélectionnés
+          const selectedMoments = selectedBtns.map(b => b.dataset.moment);
+          if (momentInput) momentInput.value = selectedMoments.join(',');
+          // Mettre à jour l'état global pour conserver la sélection au rerender
+          selectedMomentsState = selectedMoments;
+          updateSelectionFeedback();
+        };
+      });
+    }
+
+    dayInput.addEventListener('focus', function() {
+      popup.style.display = 'flex';
+      renderCustomCalendar('');
+    });
+      dayInput.addEventListener('click', function(e) {
+        e.preventDefault();
+        // Reset les moments sélectionnés à chaque ouverture
+        selectedMomentsState = [];
+        const formMomentInput = document.getElementById('reservation-moment');
+        if (formMomentInput) formMomentInput.value = '';
+        const formMomentVisible = document.getElementById('reservation-moment-visible');
+        if (formMomentVisible) formMomentVisible.value = '';
+        popup.style.display = 'flex';
+        renderCustomCalendar(dayInput.value);
+      });
+    popup.addEventListener('mousedown', function(e) {
+      if (e.target === popup) popup.style.display = 'none';
+    });
+    // Empêche la saisie manuelle
+    dayInput.addEventListener('keydown', function(e) { e.preventDefault(); });
+    dayInput.addEventListener('paste', function(e) { e.preventDefault(); });
+    // Empêche la saisie manuelle, mais ne vide pas la valeur si elle vient du calendrier
+    let lastSetByCalendar = false;
+    dayInput.addEventListener('input', function(e) {
+      if (!lastSetByCalendar) {
+        dayInput.value = '';
+      }
+      lastSetByCalendar = false;
+    });
+    // Quand une date est sélectionnée via le calendrier, on marque le flag
+    function setDateFromCalendar(dateStr) {
+      lastSetByCalendar = true;
+      dayInput.value = dateStr;
+      // Ne pas fermer le popup ni déclencher l'input ici
+    }
+    // Remplacer la sélection jour pour utiliser la fonction ci-dessus
+    function patchCalendarSelection() {
+      // Ne rien faire ici : la logique de sélection est déjà gérée dans renderCustomCalendar
+    }
+    // Patcher la fonction de rendu calendrier pour utiliser la nouvelle sélection
+    const origRenderCustomCalendar = renderCustomCalendar;
+    renderCustomCalendar = function(selectedDateStr) {
+      origRenderCustomCalendar(selectedDateStr);
+      patchCalendarSelection();
+    };
+    updateReservationDayInput();
+  });
 }
 // Export Excel (CSV simple) - doit être global pour le bouton
 
@@ -155,55 +586,21 @@ function exportOrdersToExcel() {
       ]);
     } else {
       // fallback si pas d'items détaillés
-      return [[
+      return [
         order.orderRef || order.id || '',
         order.createdAt ? new Date(order.createdAt).toLocaleString('fr-FR') : '',
         order.status || '',
         order.itemsLabel || '',
         order.quantity || 1,
         '',
-        Number.isFinite(Number(order.amountTotal)) ? (Number(order.amountTotal) / 100).toFixed(2).replace('.', ',') : '',
+        '',
         order.supplierProvider || '',
         order.dispatchStatus || '',
         order.trackingNumber || ''
-      ]];
+      ];
     }
-  }).flat();
-  let csv = headers.join(';') + '\n' + rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'commandes-chiino.csv';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
-}
-function showPage(id, btn) {
-  const pageMap = {
-    accueil: 'index.html',
-    realisations: 'realisations.html',
-    boutique: 'boutique.html',
-    contact: 'contact.html',
-    reservation: 'reservation.html'
-  };
-
-  const pageEls = document.querySelectorAll('.page');
-  const target = document.getElementById('page-' + id);
-
-  // Multi-page mode: redirection vers le fichier HTML cible.
-  if (!pageEls.length || !target) {
-    if (pageMap[id]) window.location.href = pageMap[id];
-    return;
-  }
-
-  pageEls.forEach((p) => p.classList.remove('active'));
-  target.classList.add('active');
-  document.querySelectorAll('.nav-btn').forEach((b) => b.classList.remove('active'));
-  if (btn && btn.classList) btn.classList.add('active');
-  document.body.classList.toggle('is-boutique', id === 'boutique');
-  if (id !== 'boutique') closeCart();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+  // Ici, vous pouvez continuer le traitement pour générer le CSV à partir de headers et rows
 }
 
 function setFilt(el) {
@@ -1603,6 +2000,10 @@ function initAdminBackoffice() {
   const setLoginFeedback = (message, type) => {
     if (!loginFeedback) return;
     loginFeedback.textContent = message;
+    if (!message) {
+      loginFeedback.classList.remove('show', 'ok', 'err');
+      return;
+    }
     loginFeedback.classList.add('show');
     loginFeedback.classList.remove('ok', 'err');
     loginFeedback.classList.add(type === 'ok' ? 'ok' : 'err');
@@ -1693,7 +2094,7 @@ function initAdminBackoffice() {
 
     sessionStorage.setItem(ADMIN_SESSION_KEY, 'ok');
     sessionStorage.setItem(ADMIN_PASSWORD_SESSION_KEY, password);
-    setLoginFeedback('Connexion réussie.', 'ok');
+    setLoginFeedback('', '');
     await unlockPanel();
   });
 
@@ -3390,6 +3791,8 @@ if (depositBtn) {
     const style = reservationStyleInput?.value?.trim() || '';
     const zone = reservationZoneInput?.value?.trim() || '';
     const selectedDate = reservationDayInput?.value?.trim() || '';
+    // Récupérer le moment de la journée depuis le champ caché
+    const moment = document.getElementById('reservation-moment')?.value?.trim() || '';
     const selectedPeriod = reservationPeriodInput?.value?.trim() || '';
     const periodLabelMap = { 'matin': 'Matin', 'apres-midi': 'Après-midi', 'soiree': 'Soirée' };
     const selectedPeriodLabel = periodLabelMap[selectedPeriod] || '';
@@ -3400,7 +3803,8 @@ if (depositBtn) {
     const imageFiles = Array.from(reservationImagesInput?.files || []);
     let images = [];
 
-    if (!prenom || !nom || !telephone || !description || !selectedDate || !selectedPeriod) {
+    // Vérification du moment de la journée obligatoire
+    if (!prenom || !nom || !telephone || !description || !selectedDate || !moment) {
       showDepositFeedback('Merci de compléter le formulaire et de choisir un jour et un moment de la journée.', 'err');
       return;
     }
@@ -3452,6 +3856,7 @@ if (depositBtn) {
         clientFirstName: prenom,
         clientLastName: nom,
         clientPhone: telephone,
+        reservationMoment: moment, // Ajout du moment de la journée
         // On peut ajouter d'autres infos si besoin
       });
       if (result.ok) {

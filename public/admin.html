@@ -34,11 +34,10 @@
     <section class="admin-wrap" id="admin-login-wrap">
       <article class="admin-card">
         <h2>Connexion</h2>
-        <p>Accès protégé par mot de passe local.</p>
         <div class="fg" style="margin-top:14px">
           <label for="admin-password">Mot de passe</label>
           <input id="admin-password" type="password" placeholder="Mot de passe back-office">
-        </div>
+        </div><br>
         <button id="admin-login-btn" class="btn-prim" style="margin-top:12px">Se connecter</button>
         <p id="admin-login-feedback" class="admin-feedback" aria-live="polite"></p>
       </article>
@@ -53,6 +52,9 @@
           <button class="btn-prim admin-home-btn" data-admin-target="products">Produits</button>
           <button class="btn-prim admin-home-btn" data-admin-target="orders">Commandes</button>
           <button class="btn-prim admin-home-btn" data-admin-target="schedule">Emploi du temps</button>
+        </div>
+        <div id="admin-logout-wrap" style="width:100%;display:flex;justify-content:center;margin:40px 0 0 0;display:none">
+          <button id="admin-logout-btn" class="btn-prim" style="min-width:180px">Se déconnecter</button>
         </div>
       </article>
 
@@ -194,6 +196,13 @@
       </div>
 
     </section>
+  </div>
+
+
+
+  <!-- Bouton déconnexion juste après le panneau admin principal -->
+  <div id="admin-logout-wrap" style="width:100%;display:flex;justify-content:center;margin:40px 0 0 0;display:none">
+    <button id="admin-logout-btn" class="btn-prim" style="min-width:180px">Se déconnecter</button>
   </div>
 
   <footer>

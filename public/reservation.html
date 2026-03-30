@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/png" href="Assets/favicon-flat.png?v=3">
   <script src="https://js.stripe.com/v3"></script>
@@ -28,11 +31,11 @@
         <div class="steps">
           <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Remplis le formulaire</strong><span>Décris ton projet, la zone, le style</span></div></div>
           <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Paie l'acompte</strong><span>50€ sécurisé via Stripe</span></div></div>
-          <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Confirmation sous 48h</strong><span>Chiino valide le créneau par email</span></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Confirmation sous 24h</strong><span>Chiino valide le créneau par email</span></div></div>
           <div class="step"><div class="step-num">4</div><div class="step-body"><strong>Consultation préalable</strong><span>Échange sur le dessin avant la séance</span></div></div>
         </div>
         <div class="deposit-box">
-          <p><strong>Important :</strong> l'acompte n'est pas remboursable en cas d'annulation à moins de 72h. En cas de report, il est conservé pour la prochaine séance.</p>
+          <p><strong>Important :</strong> l'acompte n'est pas remboursable en cas d'annulation à moins de 48h. En cas de report, il est conservé pour la prochaine séance.</p>
         </div>
       </div>
       <div class="booking-form">
@@ -43,8 +46,19 @@
           <div class="fg"><label for="reservation-style">Style souhaité</label><select id="reservation-style"><option>Lettering</option><option>Florale</option><option>Géométrique</option><option>Japonais</option><option>Old School</option><option>Autre</option></select></div>
           <div class="fg"><label for="reservation-zone">Zone du corps</label><input id="reservation-zone" type="text" placeholder="Avant-bras, épaule..."></div>
           <div class="fg"><label for="reservation-taille">Taille estimée</label><select id="reservation-taille"><option>Petit (< 5cm)</option><option>Moyen (5-15cm)</option><option>Grand (15-30cm)</option><option>Très grand (30cm+)</option></select></div>
-          <div class="fg"><label for="reservation-day">Jour souhaité</label><input id="reservation-day" type="date"></div>
-          <div class="fg"><label for="reservation-period">Moment de la journée</label><select id="reservation-period"><option value="">Choisir un moment</option><option value="matin">Matin</option><option value="apres-midi">Après-midi</option><option value="soiree">Soirée</option></select></div>
+          <div class="fg"><label for="reservation-day">Jour souhaité</label>
+            <input id="reservation-day" type="text" readonly placeholder="Choisir une date" class="same-style-as-other-fields" style="cursor:pointer;">
+          </div>
+          <div class="fg"><label for="reservation-moment-visible">Moment de la journée</label>
+            <input id="reservation-moment-visible" type="text" readonly placeholder="Choisir un ou plusieurs moments" class="same-style-as-other-fields" style="cursor:pointer;">
+          </div>
+          <div id="custom-calendar-popup" style="display:none;position:fixed;z-index:1000;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);align-items:center;justify-content:center;">
+            <div id="custom-calendar-container" style="background:#0a0a0f;border-radius:12px;box-shadow:0 4px 24px #0002;padding:24px;min-width:320px;max-width:90vw;border:2.5px solid #2554a0;">
+              <!-- Le calendrier custom sera injecté ici -->
+            </div>
+          </div>
+          <input type="hidden" id="reservation-moment" name="reservation-moment" value="">
+          
           <div class="fg full booking-slot-picker"><small class="booking-slot-hint">Le jour choisi doit être au minimum à 48h. L'heure exacte sera ajustée ensuite par le tatoueur.</small></div>
           <div class="fg full">
             <label for="reservation-images">Images de référence (optionnel)</label>
